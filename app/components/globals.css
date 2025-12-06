@@ -12,12 +12,11 @@ body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-start-rgb));
   min-height: 100vh;
-  /* Smooth font rendering */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom Scrollbar for the preview */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
 }
