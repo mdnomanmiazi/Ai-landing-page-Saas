@@ -5,7 +5,6 @@ FROM node:20-alpine AS base
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-# CHANGED: Use 'npm install' instead of 'npm ci' to fix missing lockfile error
 RUN npm install
 
 # 2. Rebuild the source code only when needed
@@ -26,7 +25,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+# --- CHANGED HERE: Removed the COPY command for public folder ---
+# We just create an empty folder to ensure Next.js is happy
+RUN mkdir -p public
 
 # Automatically leverage output traces to reduce image size
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
