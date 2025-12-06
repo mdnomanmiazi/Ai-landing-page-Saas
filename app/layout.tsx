@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "./components/globals.css"; // <--- CHANGED THIS LINE
+import "./globals.css"; // <--- NOW POINTING TO THE CORRECT STANDARD LOCATION
 
 export const metadata: Metadata = {
   title: "AI Landing Page Generator",
