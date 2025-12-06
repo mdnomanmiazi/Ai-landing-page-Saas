@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-// THIS LINE BELOW IS WHAT WAS MISSING
-import "./globals.css"; 
+import "./components/globals.css"; // <--- CHANGED THIS LINE
 
 export const metadata: Metadata = {
   title: "AI Landing Page Generator",
