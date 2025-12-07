@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../lib/supabase';
 import { Loader2, Sparkles, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
