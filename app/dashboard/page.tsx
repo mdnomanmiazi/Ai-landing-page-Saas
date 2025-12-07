@@ -1,9 +1,8 @@
 "use client";
 import { useEffect, useState } from 'react';
-// Correct Relative Imports
 import Navbar from '../components/Navbar';
 import { supabase } from '../../lib/supabase';
-import { Download, Layout } from 'lucide-react';
+import { Download, Layout, ExternalLink, Trash2 } from 'lucide-react';
 
 export default function Dashboard() {
   const [history, setHistory] = useState<any[]>([]);
@@ -44,25 +43,48 @@ export default function Dashboard() {
             <p className="text-slate-500">No websites generated yet.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {history.map((item) => (
-              <div key={item.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                <div className="h-48 bg-slate-100 flex items-center justify-center border-b border-slate-100">
-                  <iframe 
-                    srcDoc={item.html_code} 
-                    className="w-[200%] h-[200%] transform scale-50 origin-top-left pointer-events-none" 
-                    title="thumb"
-                  />
+              <div key={item.id} className="group bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl transition-all duration-300 flex flex-col">
+                
+                {/* PREVIEW WINDOW - Fixed Scaling Issue */}
+                <div className="relative h-64 bg-slate-100 border-b border-slate-100 overflow-hidden">
+                  <div className="absolute inset-0 pointer-events-none transform scale-[0.4] origin-top-left w-[250%] h-[250%]">
+                    <iframe 
+                      srcDoc={item.html_code} 
+                      className="w-full h-full border-none bg-white"
+                      title="thumb"
+                      tabIndex={-1}
+                    />
+                  </div>
+                  {/* Overlay on hover */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
                 </div>
-                <div className="p-5">
-                  <h3 className="font-bold text-slate-800 truncate mb-2">{item.prompt}</h3>
-                  <p className="text-xs text-slate-400 mb-4">{new Date(item.created_at).toLocaleDateString()}</p>
-                  <button 
-                    onClick={() => downloadCode(item.html_code, item.prompt)}
-                    className="w-full flex items-center justify-center gap-2 bg-slate-50 text-slate-700 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-100 border border-slate-200"
-                  >
-                    <Download size={16} /> Download Code
-                  </button>
+
+                <div className="p-6 flex flex-col flex-1">
+                  <h3 className="font-bold text-slate-900 line-clamp-1 mb-2 text-lg">{item.prompt}</h3>
+                  <p className="text-xs text-slate-500 mb-6 font-medium bg-slate-100 w-fit px-2 py-1 rounded">
+                    {new Date(item.created_at).toLocaleDateString()}
+                  </p>
+                  
+                  <div className="mt-auto grid grid-cols-2 gap-3">
+                    {/* VIEW LIVE BUTTON */}
+                    <a 
+                      href={`/view/${item.id}`} 
+                      target="_blank"
+                      className="flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-blue-200 shadow-lg"
+                    >
+                      <ExternalLink size={16} /> View Live
+                    </a>
+
+                    {/* DOWNLOAD BUTTON */}
+                    <button 
+                      onClick={() => downloadCode(item.html_code, item.prompt)}
+                      className="flex items-center justify-center gap-2 bg-white text-slate-700 border border-slate-200 py-2.5 rounded-xl text-sm font-bold hover:bg-slate-50 transition-colors"
+                    >
+                      <Download size={16} /> Code
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
