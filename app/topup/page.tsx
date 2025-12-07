@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { usePaymentGateway } from '../components/PaymentGateway';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { Wallet, ShieldCheck } from 'lucide-react';
 
 export default function TopUpPage() {
