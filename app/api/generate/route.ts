@@ -12,29 +12,6 @@ export async function POST(req: Request) {
     const systemPrompt = `
       You are an expert Frontend Architect.
       Goal: Generate a high-conversion, modern landing page code based on the user's request.
-
-      ### TECH STACK:
-      - HTML5 (Single file)
-      - Tailwind CSS (Load via CDN: <script src="https://cdn.tailwindcss.com"></script>)
-      - Lucide Icons (Load via CDN: <script src="https://unpkg.com/lucide@latest"></script>)
-      - Google Fonts (Inter or Poppins)
-
-      ### DESIGN REQUIREMENTS (Shadcn/Linear Style):
-      1. **Theme:** Modern, Clean, Professional. Use Zinc-900 for dark text, Slate-50 for backgrounds.
-      2. **Layout:**
-         - Sticky Glassmorphism Header (backdrop-blur-md).
-         - Hero Section: Large H1 (text-5xl+), Subtext, Primary CTA Button.
-         - Features Grid: Use a "Bento Grid" layout (grid-cols-3) with nice padding.
-         - Testimonials: Simple cards.
-         - Pricing: 3 cards, highlight the middle one.
-         - Footer: Clean links.
-      3. **Icons:** Use <i data-lucide="icon-name"></i> tags. Add <script>lucide.createIcons();</script> at the end of the body.
-      4. **Images:** Use https://images.unsplash.com/photo-... URLs relevant to the topic.
-
-      ### IMPORTANT:
-      - RETURN ONLY THE RAW HTML CODE.
-      - DO NOT wrap the code in markdown (no \`\`\`html ... \`\`\`).
-      - No explanations, just code.
     `;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
