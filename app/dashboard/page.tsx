@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from 'react';
+// Correct Relative Imports
+import Navbar from '../components/Navbar';
 import { supabase } from '../../lib/supabase';
 import { Download, Layout } from 'lucide-react';
 
