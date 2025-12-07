@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
-import Navbar from '../components/Navbar';
+import { supabase } from '../../lib/supabase';
 import { supabase } from '@/lib/supabase';
 import { Download, Layout } from 'lucide-react';
 
