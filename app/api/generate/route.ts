@@ -44,8 +44,8 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        // --- CHANGED TO GPT-5 HERE ---
-        model: "gpt-5", 
+        // --- CHANGED TO gpt-5-mini HERE ---
+        model: "gpt-5-mini", 
         // -----------------------------
         messages: [
           { role: "system", content: systemPrompt },
