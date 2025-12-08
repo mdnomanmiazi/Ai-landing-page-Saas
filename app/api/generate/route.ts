@@ -8,19 +8,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "OpenAI API Key is missing" }, { status: 500 });
     }
 
+    // --- PRO SYSTEM PROMPT ---
     const systemPrompt = `
-      You are an expert Frontend Architect.
-      Goal: Generate a high-conversion, modern landing page code based on the user's request.
-      
+      You are an expert Senior Frontend Engineer.
+      Goal: Generate a breathtaking, production-ready landing page.
+
       ### TECH STACK:
       - HTML5 (Single file)
       - Tailwind CSS (Load via CDN: <script src="https://cdn.tailwindcss.com"></script>)
       - Lucide Icons (Load via CDN: <script src="https://unpkg.com/lucide@latest"></script>)
-      - Google Fonts (Inter or Poppins)
+      - Google Fonts (Inter or Plus Jakarta Sans)
+
+      ### DESIGN REQUIREMENTS:
+      - Use "Glassmorphism", subtle borders, and rich gradients.
+      - Use "Bento Grid" layouts and sticky headers.
+      - Buttons must have hover effects.
+      - Hero section must be massive with a "glow" effect.
 
       ### IMPORTANT:
       - RETURN ONLY THE RAW HTML CODE.
-      - DO NOT wrap the code in markdown (no \`\`\`html ... \`\`\`).
+      - DO NOT wrap the code in markdown blocks.
+      - Initialize icons: <script>lucide.createIcons();</script>
     `;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -30,20 +38,25 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-5-mini", // I strongly recommend using this or 'gpt-4o' if 'gpt-5-mini' fails
+        // --- USING YOUR NEW MODEL ---
+        model: "gpt-5-mini", 
+        // ----------------------------
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Generate a landing page for: ${prompt}` }
+          { role: "user", content: `Generate a high-end landing page for: ${prompt}. Make it visually stunning.` }
         ],
-        // --- CHANGED HERE: Removed 'temperature' completely ---
-        max_completion_tokens: 4000 
+        // --- CRITICAL FIXES FOR NEW MODELS ---
+        // 1. Temperature removed (Reasoning models usually force this to 1)
+        // 2. Used max_completion_tokens instead of max_tokens
+        max_completion_tokens: 5000 
       })
     });
 
     const data = await response.json();
     
+    // Log any API errors directly to console so we can see them
     if (data.error) {
-      console.error("OpenAI API Error:", data.error);
+      console.error("OpenAI Error:", data.error);
       throw new Error(data.error.message);
     }
 
