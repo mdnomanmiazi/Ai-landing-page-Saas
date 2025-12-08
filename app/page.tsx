@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
 import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, Maximize2, Zap } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Correct import
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
@@ -15,6 +15,7 @@ export default function Home() {
   const [balance, setBalance] = useState(0);
   const [generatedId, setGeneratedId] = useState<string | null>(null);
   
+  const router = useRouter(); // Correct initialization
   const codeEndRef = useRef<HTMLDivElement>(null);
 
   const styles = [
@@ -36,7 +37,6 @@ export default function Home() {
     if (data) setBalance(data.balance);
   };
 
-  // Auto-scroll the code panel
   useEffect(() => {
     if (isStreaming) {
       codeEndRef.current?.scrollIntoView({ behavior: "smooth" });
