@@ -1,3 +1,10 @@
+// Allow the function to run for up to 5 minutes (max for most serverless plans)
+export const maxDuration = 300; 
+
+import { NextResponse } from 'next/server';
+// ... rest of your code
+
+
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
