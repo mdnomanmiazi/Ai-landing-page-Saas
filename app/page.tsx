@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
-import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, Maximize2 } from 'lucide-react';
+import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, Maximize2, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
@@ -12,7 +12,8 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [generatedId, setGeneratedId] = useState<string | null>(null); // To store the ID for "Open in New Tab"
+  const [balance, setBalance] = useState(0);
+  const [generatedId, setGeneratedId] = useState<string | null>(null);
   
   const codeEndRef = useRef<HTMLDivElement>(null);
 
@@ -26,9 +27,16 @@ export default function Home() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      if (session?.user) checkBalance(session.user.id);
     });
   }, []);
 
+  const checkBalance = async (userId: string) => {
+    const { data } = await supabase.from('profiles').select('balance').eq('id', userId).single();
+    if (data) setBalance(data.balance);
+  };
+
+  // Auto-scroll the code panel
   useEffect(() => {
     if (isStreaming) {
       codeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,6 +51,14 @@ export default function Home() {
 
   const handleGenerate = async () => {
     if (!user) return alert("Please sign in first");
+    
+    // 1. Check Balance
+    if (balance < 10) {
+      if(confirm("Insufficient balance (Cost: 10 BDT). Go to Top Up?")) {
+        router.push('/topup');
+      }
+      return;
+    }
     
     setLoading(true);
     setIsStreaming(true);
@@ -73,11 +89,24 @@ export default function Home() {
         setGeneratedHtml((prev) => prev + chunkValue);
       }
 
+      // Generation Complete
       const cleanHtml = fullCode.replace(/```html|```/g, "").trim();
       setGeneratedHtml(cleanHtml);
 
-      // --- CRITICAL FIX: SAVE TO DATABASE ---
-      // This ensures it appears in the Dashboard
+      // 2. DEDUCT BALANCE (Client-side trigger)
+      const newBalance = balance - 10;
+      const { error: balanceError } = await supabase
+        .from('profiles')
+        .update({ balance: newBalance })
+        .eq('id', user.id);
+
+      if (!balanceError) {
+        setBalance(newBalance); // Update UI immediately
+      } else {
+        console.error("Failed to deduct balance:", balanceError);
+      }
+
+      // 3. Save to History
       const { data, error } = await supabase.from('generations').insert({
         user_id: user.id,
         prompt: prompt,
@@ -85,9 +114,7 @@ export default function Home() {
       }).select().single();
 
       if (data) {
-        setGeneratedId(data.id); // Save ID so we can link to it
-        // Optional: Deduct balance here if not done elsewhere
-        // await supabase.from('profiles').update({ balance: balance - 10 }).eq('id', user.id);
+        setGeneratedId(data.id);
       }
 
     } catch (error) {
@@ -95,7 +122,7 @@ export default function Home() {
       alert("Something went wrong generating.");
     } finally {
       setLoading(false);
-      setIsStreaming(false);
+      setIsStreaming(false); // This triggers the preview to show
     }
   };
 
@@ -105,8 +132,10 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar />
       
-      <main className="max-w-6xl mx-auto px-4 pt-24 pb-20">
-        <div className="text-center max-w-3xl mx-auto mb-16">
+      <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
+        
+        {/* HEADER & INPUT AREA */}
+        <div className="text-center max-w-3xl mx-auto mb-12">
           <h1 className="text-5xl font-extrabold mb-6 tracking-tight">
             Build your <span className="text-blue-600">Dream Site</span>
           </h1>
@@ -128,7 +157,7 @@ export default function Home() {
                 className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 disabled:opacity-50 transition-all"
               >
                 {loading ? <Loader2 className="animate-spin" /> : <Sparkles size={18} />}
-                Generate
+                Generate <span className="text-xs font-normal opacity-70 ml-1">(-10৳)</span>
               </button>
             </div>
           </div>
@@ -146,10 +175,11 @@ export default function Home() {
           </div>
         </div>
 
+        {/* LOADING BAR */}
         {loading && (
-          <div className="max-w-3xl mx-auto mb-8">
+          <div className="max-w-3xl mx-auto mb-8 animate-in fade-in slide-in-from-bottom-4">
             <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-              <span>GENERATING...</span>
+              <span className="flex items-center gap-2"><Zap size={14} className="text-yellow-500" /> AI WORKING...</span>
               <span>{Math.round(progress)}%</span>
             </div>
             <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
@@ -161,40 +191,46 @@ export default function Home() {
           </div>
         )}
 
+        {/* WORKSPACE AREA */}
         {generatedHtml && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
-            <div className="bg-slate-900 rounded-xl shadow-2xl overflow-hidden flex flex-col h-[600px] border border-slate-800">
-              <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[75vh]">
+            
+            {/* LEFT: LIVE CODE TERMINAL */}
+            <div className="bg-slate-950 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
+              <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
                 <div className="flex items-center gap-2 text-slate-400">
                   <Terminal size={16} />
-                  <span className="text-xs font-mono">index.html</span>
+                  <span className="text-xs font-mono text-blue-400">index.html</span>
                 </div>
-                <button onClick={handleCopy} className="text-slate-400 hover:text-white flex items-center gap-1 text-xs">
+                <button onClick={handleCopy} className="text-slate-400 hover:text-white flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-white/10 transition-all">
                   {copied ? <Check size={14} className="text-green-400"/> : <Copy size={14} />}
                   {copied ? "Copied" : "Copy Code"}
                 </button>
               </div>
-              <div className="p-4 font-mono text-xs text-green-400 overflow-y-auto flex-1 custom-scrollbar">
-                <pre className="whitespace-pre-wrap break-words">{generatedHtml}{isStreaming && <span className="animate-pulse">|</span>}</pre>
+              <div className="p-4 font-mono text-xs text-emerald-400 overflow-y-auto flex-1 custom-scrollbar leading-relaxed">
+                <pre className="whitespace-pre-wrap break-words">{generatedHtml}{isStreaming && <span className="inline-block w-2 h-4 bg-emerald-400 animate-pulse align-middle ml-1"></span>}</pre>
                 <div ref={codeEndRef} />
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col h-[600px] border border-slate-200 relative">
+            {/* RIGHT: LIVE PREVIEW (With Loading State) */}
+            <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 relative">
               <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50">
                 <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                  <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                  <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                  <div className="w-3 h-3 rounded-full bg-red-400/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-yellow-400/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-green-400/80"></div>
                 </div>
                 
-                {/* --- NEW PREVIEW CONTROLS --- */}
                 <div className="flex items-center gap-2">
-                  {generatedId && (
+                  <span className="text-xs font-bold text-slate-400 tracking-wider">
+                    {isStreaming ? "DESIGNING..." : "PREVIEW READY"}
+                  </span>
+                  {generatedId && !isStreaming && (
                     <a 
                       href={`/view/${generatedId}`} 
                       target="_blank" 
-                      className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                      className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors"
                     >
                       <ExternalLink size={14} /> Full Screen
                     </a>
@@ -202,12 +238,30 @@ export default function Home() {
                 </div>
               </div>
               
-              <div className="flex-1 relative bg-white w-full h-full">
-                 <iframe srcDoc={generatedHtml} className="w-full h-full border-none" title="Preview" />
-                 {loading && progress < 10 && (
-                   <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center text-slate-400">
-                     <Loader2 className="animate-spin" />
+              <div className="flex-1 relative bg-white w-full h-full group">
+                 {isStreaming ? (
+                   /* --- LOADING EFFECT (Shown while streaming) --- */
+                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50">
+                     <div className="relative">
+                        <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Sparkles size={20} className="text-blue-600 animate-pulse" />
+                        </div>
+                     </div>
+                     <p className="mt-6 text-sm font-semibold text-slate-500 animate-pulse">
+                       AI is writing code...
+                     </p>
+                     <p className="text-xs text-slate-400 mt-2">
+                       {Math.round(generatedHtml.length / 50)} lines generated
+                     </p>
                    </div>
+                 ) : (
+                   /* --- ACTUAL PREVIEW (Shown when finished) --- */
+                   <iframe 
+                     srcDoc={generatedHtml} 
+                     className="w-full h-full border-none" 
+                     title="Preview" 
+                   />
                  )}
               </div>
             </div>
