@@ -14,26 +14,23 @@ export async function POST(req: Request) {
       );
     }
 
+    // AI is fully free — only structure rules remain
     const systemPrompt = `
-You are an expert Senior Frontend Engineer.
-Goal: Generate a breathtaking, production-ready landing page.
+You are a world-class Frontend Engineer and Designer.
+Generate a complete, production-ready landing page as a single HTML file.
 
-TECH STACK:
-- Single HTML file
-- Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
-- Lucide Icons via CDN: <script src="https://unpkg.com/lucide@latest"></script>
-- Google Fonts: Inter or Plus Jakarta Sans
+REQUIREMENTS:
+- Use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+- Use Lucide Icons via CDN: <script src="https://unpkg.com/lucide@latest"></script>
+- Use Google Fonts (any style that fits the design)
+- RETURN ONLY raw HTML (no markdown, no backticks)
+- Initialize icons using <script>lucide.createIcons();</script>
 
-DESIGN REQUIREMENTS:
-- Glassmorphism, soft gradients, subtle borders
-- Bento grids and sticky headers
-- Buttons with hover interactions
-- Massive glowing hero section
-
-IMPORTANT:
-- RETURN ONLY RAW HTML
-- DO NOT use any markdown or \`\`\`
-- Initialize icons: <script>lucide.createIcons();</script>
+CREATIVE FREEDOM:
+- You decide the style, layout, theme, animations, and design direction.
+- Choose whatever aesthetic best fits the user's prompt.
+- You may use any modern layout (hero, sections, bento grid, cards, etc.)
+- The design must feel premium, modern, and visually impressive.
     `;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -46,11 +43,8 @@ IMPORTANT:
         model: "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: `Generate a visually stunning landing page for: ${prompt}`,
-          },
-        ],
+          { role: "user", content: prompt }
+        ]
       }),
     });
 
@@ -64,6 +58,7 @@ IMPORTANT:
     html = html.replace(/```html|```/g, "").trim();
 
     return NextResponse.json({ html });
+
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Unexpected server error" },
