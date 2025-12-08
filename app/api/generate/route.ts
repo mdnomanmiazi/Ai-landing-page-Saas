@@ -12,8 +12,20 @@ export async function POST(req: Request) {
     }
 
     const systemPrompt = `
-      You are a world-class Frontend Engineer.
-      Generate a complete, production-ready landing page as a single HTML file.
+      You are an expert Senior Frontend Engineer.
+      Goal: Generate a breathtaking, production-ready landing page.
+      
+      TECH STACK:
+      - Single HTML file 
+      - Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+      - Lucide Icons via CDN: <script src="https://unpkg.com/lucide@latest"></script>
+      - Google Fonts
+
+      DESIGN REQUIREMENTS:
+      - Glassmorphism, soft gradients, subtle borders
+      - Bento grids and sticky headers
+      - Buttons with hover interactions
+      - Massive glowing hero section
       
       REQUIREMENTS:
       - Use Tailwind CSS via CDN.
