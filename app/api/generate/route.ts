@@ -1,9 +1,5 @@
-// Allow the function to run for up to 5 minutes (max for most serverless plans)
+// Allow the function to run for up to 5 minutes
 export const maxDuration = 300; 
-
-import { NextResponse } from 'next/server';
-// ... rest of your code
-
 
 import { NextResponse } from 'next/server';
 
@@ -45,23 +41,18 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        // --- USING YOUR NEW MODEL ---
-        model: "gpt-5-mini", 
-        // ----------------------------
+        model: "gpt-4o", // Using the best stable model
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Generate a high-end landing page for: ${prompt}. Make it visually stunning.` }
         ],
-        // --- CRITICAL FIXES FOR NEW MODELS ---
-        // 1. Temperature removed (Reasoning models usually force this to 1)
-        // 2. Used max_completion_tokens instead of max_tokens
-        max_completion_tokens: 5000 
+        temperature: 0.7,
+        max_tokens: 4000 
       })
     });
 
     const data = await response.json();
     
-    // Log any API errors directly to console so we can see them
     if (data.error) {
       console.error("OpenAI Error:", data.error);
       throw new Error(data.error.message);
