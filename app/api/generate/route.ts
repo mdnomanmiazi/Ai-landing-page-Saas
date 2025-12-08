@@ -30,15 +30,13 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-5-mini", // Ensure you are using a valid model like gpt-4o or gpt-4o-mini
+        model: "gpt-5-mini", // I strongly recommend using this or 'gpt-4o' if 'gpt-5-mini' fails
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Generate a landing page for: ${prompt}` }
         ],
-        temperature: 0.7,
-        // --- THE FIX IS HERE ---
+        // --- CHANGED HERE: Removed 'temperature' completely ---
         max_completion_tokens: 4000 
-        // -----------------------
       })
     });
 
