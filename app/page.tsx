@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
-import { supabase } from '../lib/supabase'; // Ensure path matches your structure
-import { Loader2, Sparkles, Copy, Check, Terminal, Play } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, Maximize2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
@@ -12,12 +12,10 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const router = useRouter();
+  const [generatedId, setGeneratedId] = useState<string | null>(null); // To store the ID for "Open in New Tab"
   
-  // For auto-scrolling the code view
   const codeEndRef = useRef<HTMLDivElement>(null);
 
-  // Suggested Styles (Like Google Chips)
   const styles = [
     { name: "✨ Modern SaaS", prompt: " with a clean, modern SaaS aesthetic, blue and white palette, bento grid" },
     { name: "🌑 Dark Mode", prompt: " in dark mode with neon accents and glassmorphism cards" },
@@ -31,7 +29,6 @@ export default function Home() {
     });
   }, []);
 
-  // Auto-scroll code view
   useEffect(() => {
     if (isStreaming) {
       codeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,7 +46,8 @@ export default function Home() {
     
     setLoading(true);
     setIsStreaming(true);
-    setGeneratedHtml(""); // Clear previous
+    setGeneratedHtml("");
+    setGeneratedId(null);
 
     try {
       const response = await fetch("/api/generate", {
@@ -60,7 +58,6 @@ export default function Home() {
 
       if (!response.ok) throw new Error(response.statusText);
 
-      // Handle Streaming Response
       const reader = response.body?.getReader();
       if (!reader) return;
 
@@ -76,12 +73,22 @@ export default function Home() {
         setGeneratedHtml((prev) => prev + chunkValue);
       }
 
-      // Cleanup markdown if AI added it (post-stream)
       const cleanHtml = fullCode.replace(/```html|```/g, "").trim();
       setGeneratedHtml(cleanHtml);
 
-      // Save to DB (Optional: Deduct credits here)
-      // await supabase.from('generations').insert(...)
+      // --- CRITICAL FIX: SAVE TO DATABASE ---
+      // This ensures it appears in the Dashboard
+      const { data, error } = await supabase.from('generations').insert({
+        user_id: user.id,
+        prompt: prompt,
+        html_code: cleanHtml
+      }).select().single();
+
+      if (data) {
+        setGeneratedId(data.id); // Save ID so we can link to it
+        // Optional: Deduct balance here if not done elsewhere
+        // await supabase.from('profiles').update({ balance: balance - 10 }).eq('id', user.id);
+      }
 
     } catch (error) {
       console.error(error);
@@ -92,16 +99,13 @@ export default function Home() {
     }
   };
 
-  // Calculate fake progress based on code length (assuming ~15k chars is full site)
-  const progress = Math.min((generatedHtml.length / 12000) * 100, 98);
+  const progress = Math.min((generatedHtml.length / 15000) * 100, 98);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar />
       
       <main className="max-w-6xl mx-auto px-4 pt-24 pb-20">
-        
-        {/* HERO INPUT SECTION */}
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h1 className="text-5xl font-extrabold mb-6 tracking-tight">
             Build your <span className="text-blue-600">Dream Site</span>
@@ -129,7 +133,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* STYLE SELECTOR BUTTONS */}
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             {styles.map((style) => (
               <button
@@ -143,7 +146,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* LOADING / PROGRESS BAR */}
         {loading && (
           <div className="max-w-3xl mx-auto mb-8">
             <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
@@ -159,35 +161,25 @@ export default function Home() {
           </div>
         )}
 
-        {/* RESULTS SECTION (SPLIT VIEW) */}
         {generatedHtml && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700">
-            
-            {/* LEFT: CODE STREAM (Matrix Style) */}
             <div className="bg-slate-900 rounded-xl shadow-2xl overflow-hidden flex flex-col h-[600px] border border-slate-800">
               <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
                 <div className="flex items-center gap-2 text-slate-400">
                   <Terminal size={16} />
                   <span className="text-xs font-mono">index.html</span>
                 </div>
-                <button 
-                  onClick={handleCopy}
-                  className="text-slate-400 hover:text-white flex items-center gap-1 text-xs"
-                >
+                <button onClick={handleCopy} className="text-slate-400 hover:text-white flex items-center gap-1 text-xs">
                   {copied ? <Check size={14} className="text-green-400"/> : <Copy size={14} />}
                   {copied ? "Copied" : "Copy Code"}
                 </button>
               </div>
               <div className="p-4 font-mono text-xs text-green-400 overflow-y-auto flex-1 custom-scrollbar">
-                <pre className="whitespace-pre-wrap break-words">
-                  {generatedHtml}
-                  {isStreaming && <span className="animate-pulse">|</span>}
-                </pre>
+                <pre className="whitespace-pre-wrap break-words">{generatedHtml}{isStreaming && <span className="animate-pulse">|</span>}</pre>
                 <div ref={codeEndRef} />
               </div>
             </div>
 
-            {/* RIGHT: LIVE PREVIEW */}
             <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col h-[600px] border border-slate-200 relative">
               <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50">
                 <div className="flex gap-1.5">
@@ -195,18 +187,23 @@ export default function Home() {
                   <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
                   <div className="w-3 h-3 rounded-full bg-green-400"></div>
                 </div>
-                <div className="text-xs text-slate-400 font-bold tracking-wider">PREVIEW</div>
-                <div className="w-10"></div> {/* Spacer */}
+                
+                {/* --- NEW PREVIEW CONTROLS --- */}
+                <div className="flex items-center gap-2">
+                  {generatedId && (
+                    <a 
+                      href={`/view/${generatedId}`} 
+                      target="_blank" 
+                      className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <ExternalLink size={14} /> Full Screen
+                    </a>
+                  )}
+                </div>
               </div>
               
-              {/* Only show iframe when we have enough HTML to render safely, or show loading state */}
               <div className="flex-1 relative bg-white w-full h-full">
-                 <iframe 
-                   srcDoc={generatedHtml} 
-                   className="w-full h-full border-none"
-                   title="Preview"
-                 />
-                 {/* Overlay during early streaming to prevent broken HTML visuals */}
+                 <iframe srcDoc={generatedHtml} className="w-full h-full border-none" title="Preview" />
                  {loading && progress < 10 && (
                    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center text-slate-400">
                      <Loader2 className="animate-spin" />
@@ -214,10 +211,8 @@ export default function Home() {
                  )}
               </div>
             </div>
-
           </div>
         )}
-
       </main>
     </div>
   );
