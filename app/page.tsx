@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
-import { Loader2, Sparkles, Lock, ArrowRight } from 'lucide-react';
+import { Loader2, Sparkles, Lock, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
@@ -10,6 +10,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [balance, setBalance] = useState(0);
+  const [generatedHtml, setGeneratedHtml] = useState<string | null>(null); // State for preview
+  const [errorLog, setErrorLog] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -32,29 +34,46 @@ export default function Home() {
     }
 
     setLoading(true);
+    setGeneratedHtml(null);
+    setErrorLog(null);
+
     try {
+      console.log("Sending request to API...");
+      
       const res = await fetch('/api/generate', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       });
+
+      console.log("Response status:", res.status);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Server Error: ${res.status} - ${errText}`);
+      }
+
       const data = await res.json();
+      console.log("Data received:", data); // Check browser console for this!
       
       if (data.html) {
-        // Deduct & Save
+        setGeneratedHtml(data.html); // SHOW PREVIEW IMMEDIATELY
+
+        // Deduct & Save in Background
         await supabase.from('profiles').update({ balance: balance - 10 }).eq('id', user.id);
-        const { data: inserted } = await supabase.from('generations').insert({
+        setBalance(prev => prev - 10);
+        
+        await supabase.from('generations').insert({
           user_id: user.id,
           prompt: prompt,
           html_code: data.html
-        }).select().single();
-
-        // Redirect to View page immediately if desired, or Dashboard
-        if (inserted) {
-           router.push(`/dashboard`); 
-        }
+        });
+      } else {
+        throw new Error("API returned success but no HTML code.");
       }
-    } catch (error) {
-      alert("Error generating.");
+    } catch (error: any) {
+      console.error("Generation Failed:", error);
+      setErrorLog(error.message);
     } finally {
       setLoading(false);
     }
@@ -64,16 +83,23 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50">
       <Navbar />
       
-      <main className="max-w-5xl mx-auto px-4 pt-24 text-center">
+      <main className="max-w-6xl mx-auto px-4 pt-24 pb-20 text-center">
         <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 mb-8 tracking-tight">
           Describe it. <span className="text-blue-600">Build it.</span>
         </h1>
         
-        <p className="text-xl text-slate-600 mb-12 max-w-2xl mx-auto">
-          Instant AI website generation. <span className="font-bold text-slate-900">10 BDT</span> per site.
-        </p>
+        {/* Error Display for Debugging */}
+        {errorLog && (
+          <div className="max-w-2xl mx-auto mb-8 p-4 bg-red-50 text-red-600 border border-red-200 rounded-lg flex items-center gap-2 text-left">
+            <AlertCircle size={20} />
+            <div>
+              <p className="font-bold">Generation Failed</p>
+              <p className="text-xs font-mono mt-1">{errorLog}</p>
+            </div>
+          </div>
+        )}
 
-        <div className="relative group max-w-3xl mx-auto mb-20">
+        <div className="relative group max-w-3xl mx-auto mb-12">
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-violet-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-200"></div>
           <div className="relative flex items-center bg-white rounded-xl shadow-2xl p-2 border border-slate-100">
             <input 
@@ -90,28 +116,36 @@ export default function Home() {
               disabled={loading || !prompt || !user}
               className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-bold text-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/30"
             >
-              {loading ? <Loader2 className="animate-spin" /> : !user ? <Lock size={20} /> : <Sparkles size={20} />}
+              {loading ? <Loader2 className="animate-spin" /> : <Sparkles size={20} />}
               {loading ? 'Building...' : 'Generate'}
             </button>
           </div>
         </div>
 
-        {/* FEATURE PREVIEW / HERO IMAGE */}
-        <div className="relative w-full aspect-video bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden group">
-           <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
-              <img 
-                src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2426&auto=format&fit=crop" 
-                className="w-full h-full object-cover opacity-90"
-                alt="Preview"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 to-transparent flex items-end justify-center pb-12">
-                 <div className="text-white text-center">
-                    <h3 className="text-2xl font-bold mb-2">Production Ready Code</h3>
-                    <p className="text-slate-200">HTML • Tailwind • Lucide Icons</p>
-                 </div>
+        {/* --- LIVE PREVIEW SECTION --- */}
+        {generatedHtml && (
+          <div className="w-full animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <div className="bg-slate-900 text-white p-4 rounded-t-xl flex justify-between items-center shadow-2xl">
+              <div className="flex gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
               </div>
-           </div>
-        </div>
+              <div className="text-sm font-mono text-slate-400">Live Preview</div>
+              <button 
+                onClick={() => router.push('/dashboard')}
+                className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1 rounded transition-colors"
+              >
+                Save & View in Dashboard
+              </button>
+            </div>
+            <iframe 
+              srcDoc={generatedHtml} 
+              className="w-full h-[80vh] border-x border-b border-slate-200 rounded-b-xl bg-white shadow-2xl"
+              title="Preview"
+            />
+          </div>
+        )}
 
       </main>
     </div>
