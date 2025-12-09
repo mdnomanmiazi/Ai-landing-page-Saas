@@ -26,7 +26,7 @@ export async function GET() {
           {
             role: "system",
             content:
-              "Return ONLY a short website idea. Format: 'Landing page for a ___ portfolio — looks like ___'. Keep it under 12 words.",
+              "Return ONLY a short website idea.",
           },
           {
             role: "user",
@@ -40,7 +40,7 @@ export async function GET() {
 
     const idea =
       data.choices?.[0]?.message?.content?.trim() ||
-      "Landing page for a modern portfolio — looks clean and minimal";
+      "Landing page for give example rendomly";
 
     return NextResponse.json(
       {
