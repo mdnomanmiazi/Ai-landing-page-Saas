@@ -2,12 +2,13 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
-import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, Maximize2, Zap } from 'lucide-react';
-import { useRouter } from 'next/navigation'; // Correct import
+import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, ArrowUp, Shuffle, Zap } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
+  const [ideaLoading, setIdeaLoading] = useState(false); // State for the idea button
   const [generatedHtml, setGeneratedHtml] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -15,15 +16,8 @@ export default function Home() {
   const [balance, setBalance] = useState(0);
   const [generatedId, setGeneratedId] = useState<string | null>(null);
   
-  const router = useRouter(); // Correct initialization
+  const router = useRouter();
   const codeEndRef = useRef<HTMLDivElement>(null);
-
-  const styles = [
-    { name: "✨ Modern SaaS", prompt: " with a clean, modern SaaS aesthetic, blue and white palette, bento grid" },
-    { name: "🌑 Dark Mode", prompt: " in dark mode with neon accents and glassmorphism cards" },
-    { name: "🌿 Minimalist", prompt: " with a minimalist, black and white swiss style typography" },
-    { name: "🎨 Retro", prompt: " with a playful 90s retro vaporwave aesthetic" },
-  ];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -49,14 +43,33 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // --- NEW: AI IDEA GENERATOR ---
+  const handleGetIdea = async () => {
+    setIdeaLoading(true);
+    try {
+      const res = await fetch('/api/idea');
+      const data = await res.json();
+      if (data.idea) {
+        // Typing effect for the idea
+        let i = 0;
+        setPrompt("");
+        const typeInterval = setInterval(() => {
+          setPrompt(data.idea.slice(0, i));
+          i++;
+          if (i > data.idea.length) clearInterval(typeInterval);
+        }, 30);
+      }
+    } catch (e) {
+      setPrompt("A landing page for a futuristic electric bike startup.");
+    } finally {
+      setIdeaLoading(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!user) return alert("Please sign in first");
-    
-    // 1. Check Balance
     if (balance < 10) {
-      if(confirm("Insufficient balance (Cost: 10 BDT). Go to Top Up?")) {
-        router.push('/topup');
-      }
+      if(confirm("Insufficient balance (Cost: 10 BDT). Go to Top Up?")) router.push('/topup');
       return;
     }
     
@@ -89,118 +102,106 @@ export default function Home() {
         setGeneratedHtml((prev) => prev + chunkValue);
       }
 
-      // Generation Complete
       const cleanHtml = fullCode.replace(/```html|```/g, "").trim();
       setGeneratedHtml(cleanHtml);
 
-      // 2. DEDUCT BALANCE (Client-side trigger)
+      // Deduct & Save
       const newBalance = balance - 10;
-      const { error: balanceError } = await supabase
-        .from('profiles')
-        .update({ balance: newBalance })
-        .eq('id', user.id);
+      await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
+      setBalance(newBalance);
 
-      if (!balanceError) {
-        setBalance(newBalance); // Update UI immediately
-      } else {
-        console.error("Failed to deduct balance:", balanceError);
-      }
-
-      // 3. Save to History
-      const { data, error } = await supabase.from('generations').insert({
+      const { data } = await supabase.from('generations').insert({
         user_id: user.id,
         prompt: prompt,
         html_code: cleanHtml
       }).select().single();
 
-      if (data) {
-        setGeneratedId(data.id);
-      }
+      if (data) setGeneratedId(data.id);
 
     } catch (error) {
       console.error(error);
-      alert("Something went wrong generating.");
+      alert("Error generating. Please try again.");
     } finally {
       setLoading(false);
-      setIsStreaming(false); // This triggers the preview to show
+      setIsStreaming(false);
     }
   };
 
   const progress = Math.min((generatedHtml.length / 15000) * 100, 98);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-[#f8f9fa] text-slate-900">
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
         
-        {/* HEADER & INPUT AREA */}
-        <div className="text-center max-w-3xl mx-auto mb-12">
-          <h1 className="text-5xl font-extrabold mb-6 tracking-tight">
-            Build your <span className="text-blue-600">Dream Site</span>
-          </h1>
-          
-          <div className="relative group shadow-2xl rounded-2xl">
-            <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-200"></div>
-            <div className="relative flex items-center bg-white rounded-2xl p-2">
-              <input 
-                type="text" 
+        {/* --- NEW HERO SECTION --- */}
+        {!generatedHtml && !loading && (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] transition-all duration-500">
+            <h1 className="text-4xl md:text-6xl font-bold text-slate-800 mb-2 text-center tracking-tight">
+              Your AI Cofounder. <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-red-500">At your service.</span>
+            </h1>
+            <p className="text-slate-500 mb-10 text-lg">Generate production-ready websites in seconds.</p>
+
+            {/* --- THE PROMPT BOX (MATCHING YOUR IMAGE) --- */}
+            <div className="w-full max-w-3xl bg-white rounded-3xl shadow-xl border border-slate-100 p-4 relative transition-shadow hover:shadow-2xl">
+              <textarea 
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe your website..."
-                className="w-full p-4 outline-none text-lg text-slate-700 bg-transparent"
-                onKeyDown={(e) => e.key === 'Enter' && !loading && handleGenerate()}
+                placeholder="Ask me to build a product landing page..."
+                className="w-full h-32 p-4 text-xl outline-none resize-none text-slate-700 placeholder:text-slate-300 bg-transparent"
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleGenerate()}
               />
-              <button 
-                onClick={handleGenerate}
-                disabled={loading || !prompt}
-                className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 disabled:opacity-50 transition-all"
-              >
-                {loading ? <Loader2 className="animate-spin" /> : <Sparkles size={18} />}
-                Generate <span className="text-xs font-normal opacity-70 ml-1">(-10৳)</span>
-              </button>
+              
+              <div className="flex justify-between items-end mt-2 px-2">
+                {/* GIVE ME AN IDEA BUTTON */}
+                <button 
+                  onClick={handleGetIdea}
+                  disabled={ideaLoading}
+                  className="flex items-center gap-2 bg-yellow-50 text-yellow-700 px-4 py-2 rounded-full text-sm font-bold hover:bg-yellow-100 transition-colors"
+                >
+                  <Shuffle size={16} className={ideaLoading ? "animate-spin" : ""} />
+                  {ideaLoading ? "Thinking..." : "Give me an idea"}
+                </button>
+
+                {/* GENERATE BUTTON (Arrow Circle) */}
+                <button 
+                  onClick={handleGenerate}
+                  disabled={!prompt || loading}
+                  className="bg-yellow-400 hover:bg-yellow-500 text-slate-900 w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-110 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ArrowUp size={24} strokeWidth={3} />
+                </button>
+              </div>
             </div>
+            
+            <p className="mt-4 text-sm text-slate-400">
+              10 BDT per generation. {user ? `Balance: ${balance} ৳` : <span className="text-blue-500 cursor-pointer" onClick={() => router.push('/topup')}>Sign in to start</span>}
+            </p>
           </div>
+        )}
 
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            {styles.map((style) => (
-              <button
-                key={style.name}
-                onClick={() => setPrompt((prev) => prev + style.prompt)}
-                className="px-4 py-1.5 rounded-full border border-slate-200 text-sm font-medium text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-              >
-                {style.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* LOADING BAR */}
+        {/* --- LOADING STATE --- */}
         {loading && (
-          <div className="max-w-3xl mx-auto mb-8 animate-in fade-in slide-in-from-bottom-4">
+          <div className="max-w-3xl mx-auto mb-8 animate-in fade-in slide-in-from-bottom-4 mt-10">
             <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-              <span className="flex items-center gap-2"><Zap size={14} className="text-yellow-500" /> AI WORKING...</span>
+              <span className="flex items-center gap-2"><Zap size={14} className="text-yellow-500" /> WRITING CODE...</span>
               <span>{Math.round(progress)}%</span>
             </div>
             <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-blue-600 transition-all duration-300 ease-out" 
-                style={{ width: `${progress}%` }}
-              />
+              <div className="h-full bg-blue-600 transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
             </div>
           </div>
         )}
 
-        {/* WORKSPACE AREA */}
+        {/* --- PREVIEW WORKSPACE --- */}
         {generatedHtml && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[75vh]">
-            
-            {/* LEFT: LIVE CODE TERMINAL */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[75vh] mt-8">
             <div className="bg-slate-950 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
               <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
                 <div className="flex items-center gap-2 text-slate-400">
                   <Terminal size={16} />
-                  <span className="text-xs font-mono text-blue-400">index.html</span>
+                  <span className="text-xs font-mono text-blue-400">code.html</span>
                 </div>
                 <button onClick={handleCopy} className="text-slate-400 hover:text-white flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-white/10 transition-all">
                   {copied ? <Check size={14} className="text-green-400"/> : <Copy size={14} />}
@@ -213,7 +214,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* RIGHT: LIVE PREVIEW (With Loading State) */}
             <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 relative">
               <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50">
                 <div className="flex gap-1.5">
@@ -221,26 +221,19 @@ export default function Home() {
                   <div className="w-3 h-3 rounded-full bg-yellow-400/80"></div>
                   <div className="w-3 h-3 rounded-full bg-green-400/80"></div>
                 </div>
-                
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-slate-400 tracking-wider">
                     {isStreaming ? "DESIGNING..." : "PREVIEW READY"}
                   </span>
                   {generatedId && !isStreaming && (
-                    <a 
-                      href={`/view/${generatedId}`} 
-                      target="_blank" 
-                      className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors"
-                    >
+                    <a href={`/view/${generatedId}`} target="_blank" className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition-colors">
                       <ExternalLink size={14} /> Full Screen
                     </a>
                   )}
                 </div>
               </div>
-              
               <div className="flex-1 relative bg-white w-full h-full group">
                  {isStreaming ? (
-                   /* --- LOADING EFFECT (Shown while streaming) --- */
                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50">
                      <div className="relative">
                         <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
@@ -248,20 +241,10 @@ export default function Home() {
                           <Sparkles size={20} className="text-blue-600 animate-pulse" />
                         </div>
                      </div>
-                     <p className="mt-6 text-sm font-semibold text-slate-500 animate-pulse">
-                       AI is writing code...
-                     </p>
-                     <p className="text-xs text-slate-400 mt-2">
-                       {Math.round(generatedHtml.length / 50)} lines generated
-                     </p>
+                     <p className="mt-6 text-sm font-semibold text-slate-500 animate-pulse">AI is writing code...</p>
                    </div>
                  ) : (
-                   /* --- ACTUAL PREVIEW (Shown when finished) --- */
-                   <iframe 
-                     srcDoc={generatedHtml} 
-                     className="w-full h-full border-none" 
-                     title="Preview" 
-                   />
+                   <iframe srcDoc={generatedHtml} className="w-full h-full border-none" title="Preview" />
                  )}
               </div>
             </div>
