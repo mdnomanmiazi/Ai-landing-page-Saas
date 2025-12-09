@@ -21,26 +21,37 @@ export async function GET() {
       },
       cache: "no-store",
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "gpt-3.5-turbo", // or gpt-4 if you prefer
         messages: [
           {
             role: "system",
-            content:
-              "Return ONLY Landing page idea about products, services, etc",
+            content: "You generate simple landing page prompt ideas. Return ONLY one idea in this exact format: 'landing page for [topic]'. Keep it very short - 3-6 words max. Make it diverse: products, services, apps, subscriptions, etc."
           },
           {
             role: "user",
-            content: "Return ONLY Landing page idea about products, services, etc",
+            content: "Give me one landing page prompt idea. Return ONLY: 'landing page for [topic]'"
           },
         ],
+        temperature: 1.2, // Higher for more creativity
+        max_tokens: 20, // Very short response
       }),
     });
 
     const data = await response.json();
 
-    const idea =
-      data.choices?.[0]?.message?.content?.trim() ||
-      "Return ONLY Landing page idea about products, services, etc";
+    // Extract and clean the response
+    let idea = data.choices?.[0]?.message?.content?.trim() || "";
+    
+    // Fallback if OpenAI returns empty or wrong format
+    if (!idea || idea === "") {
+      idea = "landing page for eco-friendly water bottles";
+    }
+    
+    // Ensure it's in the right format (clean up any extra text)
+    idea = idea.toLowerCase();
+    if (!idea.startsWith("landing page for ")) {
+      idea = "landing page for " + idea.replace(/^landing page for\s*/i, "").replace(/\.$/, "");
+    }
 
     return NextResponse.json(
       {
@@ -49,8 +60,7 @@ export async function GET() {
       },
       {
         headers: {
-          "Cache-Control":
-            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
           Pragma: "no-cache",
           Expires: "0",
         },
@@ -58,9 +68,10 @@ export async function GET() {
     );
   } catch (error) {
     console.error("Idea Error:", error);
+    // Fallback simple prompt
     return NextResponse.json(
       {
-        idea: "Landing page for a digital creator — looks bright and futuristic",
+        idea: "landing page for smart home devices",
       },
       { status: 200 }
     );
