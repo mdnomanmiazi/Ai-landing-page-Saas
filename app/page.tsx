@@ -2,13 +2,13 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
-import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, ArrowUp, Shuffle, Zap } from 'lucide-react';
+import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, RefreshCw, Plus, ArrowUp, Shuffle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
-  const [ideaLoading, setIdeaLoading] = useState(false); // State for the idea button
+  const [ideaLoading, setIdeaLoading] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -43,27 +43,24 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // --- NEW: AI IDEA GENERATOR ---
   const handleGetIdea = async () => {
     setIdeaLoading(true);
     try {
       const res = await fetch('/api/idea');
       const data = await res.json();
-      if (data.idea) {
-        // Typing effect for the idea
-        let i = 0;
-        setPrompt("");
-        const typeInterval = setInterval(() => {
-          setPrompt(data.idea.slice(0, i));
-          i++;
-          if (i > data.idea.length) clearInterval(typeInterval);
-        }, 30);
-      }
+      if (data.idea) setPrompt(data.idea);
     } catch (e) {
-      setPrompt("A landing page for a futuristic electric bike startup.");
+      setPrompt("A futuristic landing page for an AI startup");
     } finally {
       setIdeaLoading(false);
     }
+  };
+
+  // Reset to start over
+  const handleNew = () => {
+    setGeneratedHtml("");
+    setPrompt("");
+    setGeneratedId(null);
   };
 
   const handleGenerate = async () => {
@@ -105,7 +102,6 @@ export default function Home() {
       const cleanHtml = fullCode.replace(/```html|```/g, "").trim();
       setGeneratedHtml(cleanHtml);
 
-      // Deduct & Save
       const newBalance = balance - 10;
       await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
       setBalance(newBalance);
@@ -120,14 +116,12 @@ export default function Home() {
 
     } catch (error) {
       console.error(error);
-      alert("Error generating. Please try again.");
+      alert("Error generating.");
     } finally {
       setLoading(false);
       setIsStreaming(false);
     }
   };
-
-  const progress = Math.min((generatedHtml.length / 15000) * 100, 98);
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-slate-900">
@@ -135,7 +129,7 @@ export default function Home() {
       
       <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
         
-        {/* --- NEW HERO SECTION --- */}
+        {/* --- 1. INPUT SECTION (Only shows when NOT generating) --- */}
         {!generatedHtml && !loading && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] transition-all duration-500">
             <h1 className="text-4xl md:text-6xl font-bold text-slate-800 mb-2 text-center tracking-tight">
@@ -143,7 +137,6 @@ export default function Home() {
             </h1>
             <p className="text-slate-500 mb-10 text-lg">Generate production-ready websites in seconds.</p>
 
-            {/* --- THE PROMPT BOX (MATCHING YOUR IMAGE) --- */}
             <div className="w-full max-w-3xl bg-white rounded-3xl shadow-xl border border-slate-100 p-4 relative transition-shadow hover:shadow-2xl">
               <textarea 
                 value={prompt}
@@ -154,7 +147,6 @@ export default function Home() {
               />
               
               <div className="flex justify-between items-end mt-2 px-2">
-                {/* GIVE ME AN IDEA BUTTON */}
                 <button 
                   onClick={handleGetIdea}
                   disabled={ideaLoading}
@@ -164,7 +156,6 @@ export default function Home() {
                   {ideaLoading ? "Thinking..." : "Give me an idea"}
                 </button>
 
-                {/* GENERATE BUTTON (Arrow Circle) */}
                 <button 
                   onClick={handleGenerate}
                   disabled={!prompt || loading}
@@ -181,27 +172,39 @@ export default function Home() {
           </div>
         )}
 
-        {/* --- LOADING STATE --- */}
-        {loading && (
-          <div className="max-w-3xl mx-auto mb-8 animate-in fade-in slide-in-from-bottom-4 mt-10">
-            <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-              <span className="flex items-center gap-2"><Zap size={14} className="text-yellow-500" /> WRITING CODE...</span>
-              <span>{Math.round(progress)}%</span>
-            </div>
-            <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-600 transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
-            </div>
+        {/* --- 2. ACTION BAR (Only shows AFTER generation is complete) --- */}
+        {generatedHtml && !loading && (
+          <div className="flex justify-between items-center mb-6 animate-in fade-in slide-in-from-top-4">
+             <div className="flex items-center gap-4">
+                <button 
+                  onClick={handleNew}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+                >
+                  <Plus size={16} /> Generate New
+                </button>
+                <button 
+                  onClick={handleGenerate}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+                >
+                  <RefreshCw size={16} /> Regenerate
+                </button>
+             </div>
+             
+             <div className="text-sm font-medium text-slate-500">
+               Balance: <span className="text-slate-900 font-bold">{balance} ৳</span>
+             </div>
           </div>
         )}
 
-        {/* --- PREVIEW WORKSPACE --- */}
-        {generatedHtml && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[75vh] mt-8">
+        {/* --- 3. SPLIT VIEW (Streaming Code + Preview) --- */}
+        {(generatedHtml || loading) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[80vh]">
+            {/* LEFT: TERMINAL */}
             <div className="bg-slate-950 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
               <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
                 <div className="flex items-center gap-2 text-slate-400">
                   <Terminal size={16} />
-                  <span className="text-xs font-mono text-blue-400">code.html</span>
+                  <span className="text-xs font-mono text-blue-400">index.html</span>
                 </div>
                 <button onClick={handleCopy} className="text-slate-400 hover:text-white flex items-center gap-1 text-xs px-2 py-1 rounded hover:bg-white/10 transition-all">
                   {copied ? <Check size={14} className="text-green-400"/> : <Copy size={14} />}
@@ -214,6 +217,7 @@ export default function Home() {
               </div>
             </div>
 
+            {/* RIGHT: PREVIEW */}
             <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 relative">
               <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50">
                 <div className="flex gap-1.5">
