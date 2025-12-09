@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
-import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, RefreshCw, Plus, ArrowUp, Shuffle } from 'lucide-react';
+import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, RefreshCw, Plus, ArrowUp, Shuffle, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
@@ -18,6 +18,13 @@ export default function Home() {
   
   const router = useRouter();
   const codeEndRef = useRef<HTMLDivElement>(null);
+
+  const styles = [
+    { name: "✨ Modern SaaS", prompt: " with a clean, modern SaaS aesthetic, blue and white palette, bento grid" },
+    { name: "🌑 Dark Mode", prompt: " in dark mode with neon accents and glassmorphism cards" },
+    { name: "🌿 Minimalist", prompt: " with a minimalist, black and white swiss style typography" },
+    { name: "🎨 Retro", prompt: " with a playful 90s retro vaporwave aesthetic" },
+  ];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -36,6 +43,16 @@ export default function Home() {
       codeEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [generatedHtml, isStreaming]);
+
+  // --- NEW: LOGIN HANDLER ---
+  const handleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/`,
+      },
+    });
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedHtml);
@@ -56,7 +73,6 @@ export default function Home() {
     }
   };
 
-  // Reset to start over
   const handleNew = () => {
     setGeneratedHtml("");
     setPrompt("");
@@ -64,7 +80,11 @@ export default function Home() {
   };
 
   const handleGenerate = async () => {
-    if (!user) return alert("Please sign in first");
+    // --- UPDATE: AUTO TRIGGER LOGIN ---
+    if (!user) {
+      return handleLogin();
+    }
+
     if (balance < 10) {
       if(confirm("Insufficient balance (Cost: 10 BDT). Go to Top Up?")) router.push('/topup');
       return;
@@ -123,13 +143,15 @@ export default function Home() {
     }
   };
 
+  const progress = Math.min((generatedHtml.length / 15000) * 100, 98);
+
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-slate-900">
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
         
-        {/* --- 1. INPUT SECTION (Only shows when NOT generating) --- */}
+        {/* --- 1. INPUT SECTION --- */}
         {!generatedHtml && !loading && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] transition-all duration-500">
             <h1 className="text-4xl md:text-6xl font-bold text-slate-800 mb-2 text-center tracking-tight">
@@ -167,12 +189,30 @@ export default function Home() {
             </div>
             
             <p className="mt-4 text-sm text-slate-400">
-              10 BDT per generation. {user ? `Balance: ${balance} ৳` : <span className="text-blue-500 cursor-pointer" onClick={() => router.push('/topup')}>Sign in to start</span>}
+              10 BDT per generation. {user ? `Balance: ${balance} ৳` : 
+                // --- UPDATE: TRIGGER LOGIN ON CLICK ---
+                <span className="text-blue-500 cursor-pointer hover:underline font-medium" onClick={handleLogin}>
+                  Sign in to start
+                </span>
+              }
             </p>
+
+            {/* Suggestions */}
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              {styles.map((style) => (
+                <button
+                  key={style.name}
+                  onClick={() => setPrompt((prev) => prev + style.prompt)}
+                  className="px-4 py-1.5 rounded-full border border-slate-200 text-sm font-medium text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                >
+                  {style.name}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* --- 2. ACTION BAR (Only shows AFTER generation is complete) --- */}
+        {/* --- 2. ACTION BAR --- */}
         {generatedHtml && !loading && (
           <div className="flex justify-between items-center mb-6 animate-in fade-in slide-in-from-top-4">
              <div className="flex items-center gap-4">
@@ -189,17 +229,15 @@ export default function Home() {
                   <RefreshCw size={16} /> Regenerate
                 </button>
              </div>
-             
              <div className="text-sm font-medium text-slate-500">
                Balance: <span className="text-slate-900 font-bold">{balance} ৳</span>
              </div>
           </div>
         )}
 
-        {/* --- 3. SPLIT VIEW (Streaming Code + Preview) --- */}
+        {/* --- 3. SPLIT VIEW --- */}
         {(generatedHtml || loading) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[80vh]">
-            {/* LEFT: TERMINAL */}
             <div className="bg-slate-950 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
               <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
                 <div className="flex items-center gap-2 text-slate-400">
@@ -217,7 +255,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* RIGHT: PREVIEW */}
             <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 relative">
               <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50">
                 <div className="flex gap-1.5">
