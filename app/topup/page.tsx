@@ -2,12 +2,13 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { usePaymentGateway } from '../components/PaymentGateway';
-import { supabase } from '../../lib/supabase';
-import { Wallet, ShieldCheck } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Wallet, ShieldCheck, Zap } from 'lucide-react';
 
 export default function TopUpPage() {
   const { processPayment, isLoading } = usePaymentGateway();
-  const [amount, setAmount] = useState(100);
+  // --- UPDATE 1: Default to 10 ---
+  const [amount, setAmount] = useState(10); 
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
@@ -19,7 +20,9 @@ export default function TopUpPage() {
   const handleTopUp = async () => {
     if (!user) return alert("Please sign in first");
     
-    // Save pending amount to local storage to verify on success page
+    // --- UPDATE 2: Minimum check ---
+    if (amount < 10) return alert("Minimum top up is 10 BDT");
+
     localStorage.setItem('pending_topup', amount.toString());
     
     await processPayment(
@@ -32,7 +35,7 @@ export default function TopUpPage() {
       {
         name: user.user_metadata.full_name || "User",
         email: user.email,
-        phone: "01700000000", // Required by SSLCommerz
+        phone: "01700000000",
         address: "Digital Wallet",
         city: "Dhaka"
       }
@@ -47,11 +50,15 @@ export default function TopUpPage() {
           <div className="p-3 bg-blue-100 text-blue-600 rounded-lg">
             <Wallet size={24} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Add Funds</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Add Funds</h1>
+            <p className="text-sm text-slate-500">Minimum 10 BDT</p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          {[50, 100, 200, 500, 1000].map((val) => (
+        <div className="grid grid-cols-4 gap-3 mb-6">
+          {/* --- UPDATE 3: Added 10 to the list --- */}
+          {[10, 50, 100, 500].map((val) => (
             <button
               key={val}
               onClick={() => setAmount(val)}
@@ -77,7 +84,7 @@ export default function TopUpPage() {
 
         <button 
           onClick={handleTopUp}
-          disabled={isLoading || !user}
+          disabled={isLoading || !user || amount < 10}
           className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-70 flex justify-center items-center gap-2"
         >
           {isLoading ? "Redirecting..." : `Pay ${amount} BDT`}
