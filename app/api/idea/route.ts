@@ -26,11 +26,11 @@ export async function GET() {
           {
             role: "system",
             content:
-              "Return ONLY a short website idea.",
+              "Return ONLY Landing page idea about products, services, etc",
           },
           {
             role: "user",
-            content: "Give me one unique website idea following the required format.",
+            content: "Return ONLY Landing page idea about products, services, etc",
           },
         ],
       }),
@@ -40,7 +40,7 @@ export async function GET() {
 
     const idea =
       data.choices?.[0]?.message?.content?.trim() ||
-      "Landing page for give example rendomly";
+      "Return ONLY Landing page idea about products, services, etc";
 
     return NextResponse.json(
       {
