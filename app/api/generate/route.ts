@@ -1,7 +1,32 @@
-// Allow long generation times
+// Allow 5 minutes for generation
 export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
+
+// Helper to fetch images from Unsplash
+async function getUnsplashImages(query: string): Promise<string[]> {
+  try {
+    const apiKey = process.env.UNSPLASH_ACCESS_KEY;
+    if (!apiKey) return [];
+
+    // Clean prompt to get better search keywords (simple truncation)
+    // In a pro app, you might ask AI to extract a keyword, but this is faster.
+    const searchTerm = query.split(' ').slice(0, 5).join(' '); 
+
+    const res = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchTerm)}&per_page=6&orientation=landscape&content_filter=high`,
+      { headers: { Authorization: `Client-ID ${apiKey}` } }
+    );
+
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    return data.results.map((img: any) => img.urls.regular);
+  } catch (e) {
+    console.error("Unsplash Error:", e);
+    return [];
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -11,30 +36,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
     }
 
-    const systemPrompt = `
-      You are an expert Senior Frontend Engineer.
-      Goal: Generate a breathtaking, production-ready landing page.
-      
-      TECH STACK:
-      - Single HTML file 
-      - Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
-      - Lucide Icons via CDN: <script src="https://unpkg.com/lucide@latest"></script>
-      - Google Fonts
+    // 1. FETCH REAL IMAGES FIRST
+    const images = await getUnsplashImages(prompt);
+    
+    // Prepare image instructions for the AI
+    let imageInstruction = "";
+    if (images.length > 0) {
+      imageInstruction = `
+      ### IMAGE ASSETS (CRITICAL):
+      You MUST use the following real image URLs for backgrounds, hero sections, and cards. 
+      Do NOT use placeholders. Rotate through these specific URLs:
+      ${JSON.stringify(images)}
+      `;
+    } else {
+      imageInstruction = "Use high-quality Unsplash source URLs (e.g., https://source.unsplash.com/random/1200x800/?tech).";
+    }
 
-      DESIGN REQUIREMENTS:
-      - Glassmorphism, soft gradients, subtle borders
-      - Bento grids and sticky headers
-      - Buttons with hover interactions
-      - Massive glowing hero section
+    // 2. CONSTRUCT SYSTEM PROMPT
+    const systemPrompt = `
+      You are a world-class Frontend Engineer and UI/UX Designer.
+      Generate a complete, production-ready landing page as a single HTML file.
       
       REQUIREMENTS:
-      - Use Tailwind CSS via CDN.
-      - Use Lucide Icons via CDN.
-      - Use Google Fonts.
-      - RETURN ONLY RAW HTML (No markdown blocks, no \`\`\`).
+      - Use Tailwind CSS via CDN: <script src="https://cdn.tailwindcss.com"></script>
+      - Use Lucide Icons via CDN: <script src="https://unpkg.com/lucide@latest"></script>
+      - Use Google Fonts (Inter, Plus Jakarta Sans, or Playfair Display).
+      - RETURN ONLY raw HTML (no markdown, no backticks).
       - Initialize icons using <script>lucide.createIcons();</script> at the end.
+
+      ${imageInstruction}
+
+      DESIGN DIRECTION:
+      - Use Glassmorphism, deep gradients, and "Bento Grid" layouts.
+      - The Hero Section must use the first image from the provided list as a background or side image.
+      - Make it look like an award-winning site on Awwwards.
     `;
 
+    // 3. CALL OPENAI WITH STREAMING
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -42,12 +80,12 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-5-mini", // Your preferred model
+        model: "gpt-5-mini", // Your working model
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Generate a visually stunning landing page for: ${prompt}` }
         ],
-        stream: true, // <--- ENABLE STREAMING
+        stream: true,
       }),
     });
 
@@ -55,7 +93,7 @@ export async function POST(req: Request) {
       throw new Error(response.statusText);
     }
 
-    // Create a streaming response
+    // 4. STREAM RESPONSE TO CLIENT
     const stream = new ReadableStream({
       async start(controller) {
         const reader = response.body?.getReader();
@@ -74,9 +112,8 @@ export async function POST(req: Request) {
           const chunk = decoder.decode(value, { stream: true });
           buffer += chunk;
 
-          // Process OpenAI data structure (data: {...})
           const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep incomplete line
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             if (line.trim() === "data: [DONE]") continue;
@@ -85,11 +122,10 @@ export async function POST(req: Request) {
                 const json = JSON.parse(line.slice(6));
                 const content = json.choices[0]?.delta?.content || "";
                 if (content) {
-                  // Send raw HTML chunk to client
                   controller.enqueue(new TextEncoder().encode(content));
                 }
               } catch (e) {
-                // Ignore parse errors for partial chunks
+                // Ignore parse errors
               }
             }
           }
