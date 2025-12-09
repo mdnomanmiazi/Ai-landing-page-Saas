@@ -2,12 +2,12 @@
 import { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { usePaymentGateway } from '../components/PaymentGateway';
-import { supabase } from '@/lib/supabase';
+// CORRECTED IMPORT PATH
+import { supabase } from '../../lib/supabase';
 import { Wallet, ShieldCheck, Zap } from 'lucide-react';
 
 export default function TopUpPage() {
   const { processPayment, isLoading } = usePaymentGateway();
-  // --- UPDATE 1: Default to 10 ---
   const [amount, setAmount] = useState(10); 
   const [user, setUser] = useState<any>(null);
 
@@ -20,7 +20,6 @@ export default function TopUpPage() {
   const handleTopUp = async () => {
     if (!user) return alert("Please sign in first");
     
-    // --- UPDATE 2: Minimum check ---
     if (amount < 10) return alert("Minimum top up is 10 BDT");
 
     localStorage.setItem('pending_topup', amount.toString());
@@ -57,7 +56,6 @@ export default function TopUpPage() {
         </div>
 
         <div className="grid grid-cols-4 gap-3 mb-6">
-          {/* --- UPDATE 3: Added 10 to the list --- */}
           {[10, 50, 100, 500].map((val) => (
             <button
               key={val}
