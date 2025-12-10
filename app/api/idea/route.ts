@@ -21,22 +21,18 @@ export async function GET() {
       },
       cache: "no-store",
       body: JSON.stringify({
-        // Ensure this model name is valid for your account (e.g., gpt-4o-mini or gpt-3.5-turbo)
-        model: "gpt-5-mini", 
+        model: "gpt-5-mini",
         messages: [
           {
             role: "system",
-            // UPDATED PROMPT: Enforces simple structure, forbids visual descriptions
             content:
-              "Return ONLY a short website idea. Strict format: 'Landing page for [unique topic]'. Do not describe the design or look. Examples: 'Landing page for cat food', 'Landing page for a law firm'. Keep it under 6 words.",
+              "Return ONLY a short website idea. Strict Format: 'Landing page for [noun]'. Examples: 'Landing page for cat food', 'Landing page for a watch store'. Do not describe the design or look. Keep it under 6 words.",
           },
           {
             role: "user",
             content: "Give me one unique, random website idea.",
           },
         ],
-        // Lower temperature slightly to ensure it sticks to formatting
-        temperature: 0.8,
       }),
     });
 
@@ -44,7 +40,7 @@ export async function GET() {
 
     const idea =
       data.choices?.[0]?.message?.content?.trim() ||
-      "Landing page for a coffee shop"; // Updated fallback
+      "Landing page for a coffee shop";
 
     return NextResponse.json(
       {
@@ -62,7 +58,6 @@ export async function GET() {
     );
   } catch (error) {
     console.error("Idea Error:", error);
-    // Updated error fallback to match the new style
     return NextResponse.json(
       {
         idea: "Landing page for a digital agency",
