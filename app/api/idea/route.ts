@@ -21,7 +21,7 @@ export async function GET() {
       },
       cache: "no-store",
       body: JSON.stringify({
-        model: "gpt-3.5-turbo", // or gpt-4 if you prefer
+        model: "gpt-5-nano", // or gpt-4 if you prefer
         messages: [
           {
             role: "system",
