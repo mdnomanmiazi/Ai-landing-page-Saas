@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-5-mini", // Your working model
+        model: "gpt-5", // Your working model
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Generate a visually stunning landing page for: ${prompt}` }
