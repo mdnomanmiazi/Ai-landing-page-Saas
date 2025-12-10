@@ -21,16 +21,16 @@ export async function GET() {
       },
       cache: "no-store",
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "gpt-5-nano",
         messages: [
           {
             role: "system",
             content:
-              "Return ONLY a short website idea. Strict Format: 'Landing page for [noun]'. Examples: 'Landing page for cat food', 'Landing page for a watch store'. Do not describe the design or look. Keep it under 6 words.",
+              "Return ONLY a short website idea. Strict Format: 'Landing page for [noun]'. Focus on these topics: SaaS, Finance, Portfolios, Digital Products, Gyms, Resumes, or Business Tools. Do not describe the design. Examples: 'Landing page for a finance tracker', 'Landing page for a SaaS dashboard', 'Landing page for a digital resume'. Keep it under 8 words.",
           },
           {
             role: "user",
-            content: "Give me one unique, random website idea.",
+            content: "Give me one unique website idea from the requested topics.",
           },
         ],
       }),
@@ -40,7 +40,7 @@ export async function GET() {
 
     const idea =
       data.choices?.[0]?.message?.content?.trim() ||
-      "Landing page for a coffee shop";
+      "Landing page for a SaaS platform";
 
     return NextResponse.json(
       {
@@ -60,7 +60,7 @@ export async function GET() {
     console.error("Idea Error:", error);
     return NextResponse.json(
       {
-        idea: "Landing page for a digital agency",
+        idea: "Landing page for a finance app",
       },
       { status: 200 }
     );
