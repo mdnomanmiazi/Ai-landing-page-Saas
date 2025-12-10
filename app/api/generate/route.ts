@@ -1,7 +1,30 @@
+// Allow the function to run for up to 5 minutes
 export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
-import { calculateCost } from "@/lib/pricing";
+// FIX: Use relative path
+import { calculateCost } from "../../../lib/pricing";
+
+// ... (Rest of the file remains exactly the same, just fix the import at the top)
+// But for safety, I will provide the full file content below to avoid any copy-paste errors.
+
+async function getUnsplashImages(query: string): Promise<string[]> {
+  try {
+    const apiKey = process.env.UNSPLASH_ACCESS_KEY;
+    if (!apiKey) return [];
+    const searchTerm = query.split(' ').slice(0, 5).join(' '); 
+    const res = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchTerm)}&per_page=6&orientation=landscape&content_filter=high`,
+      { headers: { Authorization: `Client-ID ${apiKey}` } }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.results.map((img: any) => img.urls.regular);
+  } catch (e) {
+    console.error("Unsplash Error:", e);
+    return [];
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +32,17 @@ export async function POST(req: Request) {
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
+    }
+
+    const images = await getUnsplashImages(prompt);
+    let imageInstruction = "";
+    if (images.length > 0) {
+      imageInstruction = `
+      ### IMAGE ASSETS (CRITICAL):
+      You MUST use the following real image URLs for backgrounds, hero sections, and cards. 
+      Do NOT use placeholders. Rotate through these specific URLs:
+      ${JSON.stringify(images)}
+      `;
     }
 
     const systemPrompt = `
@@ -19,6 +53,7 @@ export async function POST(req: Request) {
       - Use Lucide Icons via CDN.
       - Use Google Fonts.
       - RETURN ONLY RAW HTML.
+      ${imageInstruction}
     `;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -34,7 +69,6 @@ export async function POST(req: Request) {
           { role: "user", content: prompt }
         ],
         stream: true,
-        // CRITICAL: Request usage data at the end of the stream
         stream_options: { include_usage: true } 
       }),
     });
@@ -64,21 +98,18 @@ export async function POST(req: Request) {
               try {
                 const json = JSON.parse(line.slice(6));
                 
-                // 1. Content Chunk
                 const content = json.choices?.[0]?.delta?.content || "";
                 if (content) {
                   controller.enqueue(new TextEncoder().encode(content));
                 }
 
-                // 2. Usage Chunk (Always comes last)
                 if (json.usage) {
                   const totalCost = calculateCost(
                     model || "gpt-5", 
                     json.usage.prompt_tokens, 
                     json.usage.completion_tokens
                   );
-                  // Send cost as a special HTML comment at the end
-                  // Example: const costTag = `\n`;
+                  const costTag = `\n`;
                   controller.enqueue(new TextEncoder().encode(costTag));
                 }
               } catch (e) {}
