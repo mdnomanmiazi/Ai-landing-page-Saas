@@ -27,7 +27,7 @@ export default function PaymentSuccess() {
           .eq('id', user.id);
 
         if (!error) {
-          setStatus(`Successfully added ${amount} BDT to your wallet.`);
+          setStatus(`Successfully added ${amount} USD to your wallet.`);
           setAdded(true);
           localStorage.removeItem('pending_topup'); // Clear it so it doesn't run again on refresh
         } else {
