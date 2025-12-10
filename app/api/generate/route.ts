@@ -1,4 +1,4 @@
-// Allow 5 minutes
+// Allow 5 minutes execution
 export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
@@ -29,6 +29,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
     }
 
+    // 1. Get Images
     const images = await getUnsplashImages(prompt);
     let imageInstruction = "";
     if (images.length > 0) {
@@ -37,13 +38,20 @@ export async function POST(req: Request) {
 
     const systemPrompt = `
       You are a world-class Frontend Engineer.
-      Generate a complete, production-ready landing page.
+      Generate a complete, production-ready landing page as a single HTML file.
       REQUIREMENTS:
-      - Use Tailwind CSS and Lucide Icons via CDN.
+      - Use Tailwind CSS via CDN.
+      - Use Lucide Icons via CDN.
       - Use Google Fonts.
       - RETURN ONLY RAW HTML.
       ${imageInstruction}
     `;
+
+    // 2. Initial Fallback Usage Calculation (Estimate)
+    // 1 token ~= 4 chars
+    const estimatedInputTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);
+    let estimatedOutputTokens = 0;
+    let usageSent = false;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -58,16 +66,11 @@ export async function POST(req: Request) {
           { role: "user", content: prompt }
         ],
         stream: true,
-        stream_options: { include_usage: true } 
+        stream_options: { include_usage: true } // Request Usage
       }),
     });
 
     if (!response.ok) throw new Error(response.statusText);
-
-    // Track approximate usage in case API doesn't send it
-    let approxInputTokens = (systemPrompt.length + prompt.length) / 4;
-    let approxOutputTokens = 0;
-    let usageSent = false;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -89,14 +92,14 @@ export async function POST(req: Request) {
               try {
                 const json = JSON.parse(line.slice(6));
                 
-                // 1. Content Chunk
+                // A. Content Chunk
                 const content = json.choices?.[0]?.delta?.content || "";
                 if (content) {
-                  approxOutputTokens += content.length / 4; // Estimate
+                  estimatedOutputTokens += Math.ceil(content.length / 3.5); // Track output size
                   controller.enqueue(new TextEncoder().encode(content));
                 }
 
-                // 2. Official Usage Chunk
+                // B. Official Usage Chunk
                 if (json.usage) {
                   usageSent = true;
                   const totalCost = calculateCost(
@@ -104,6 +107,7 @@ export async function POST(req: Request) {
                     json.usage.prompt_tokens, 
                     json.usage.completion_tokens
                   );
+                  // Send Cost Tag
                   controller.enqueue(new TextEncoder().encode(`\n`));
                 }
               } catch (e) {}
@@ -111,12 +115,12 @@ export async function POST(req: Request) {
           }
         }
 
-        // 3. Fallback: If no usage sent, use our estimate
+        // C. Fallback: If OpenAI didn't send usage, use our manual count
         if (!usageSent) {
-          const estimatedCost = calculateCost(
+          const fallbackCost = calculateCost(
             model || "gpt-5", 
-            Math.ceil(approxInputTokens), 
-            Math.ceil(approxOutputTokens)
+            estimatedInputTokens, 
+            estimatedOutputTokens
           );
           controller.enqueue(new TextEncoder().encode(`\n`));
         }
