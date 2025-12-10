@@ -26,11 +26,21 @@ export default function Home() {
     { name: "🎨 Retro", prompt: " with a playful 90s retro vaporwave aesthetic" },
   ];
 
+  // --- AUTH LISTENER ---
   useEffect(() => {
+    // 1. Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) checkBalance(session.user.id);
     });
+
+    // 2. Listen for "Popup" logins (LocalStorage sync)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) checkBalance(session.user.id);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const checkBalance = async (userId: string) => {
@@ -44,14 +54,37 @@ export default function Home() {
     }
   }, [generatedHtml, isStreaming]);
 
-  // --- NEW: LOGIN HANDLER ---
+  // --- NEW: POPUP LOGIN HANDLER ---
   const handleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/`,
+        skipBrowserRedirect: true, // Crucial: Gives us the URL instead of redirecting
+        redirectTo: `${window.location.origin}/auth/popup`, // Redirect popup to our closer page
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account', // Forces Account Chooser
+        },
       },
     });
+
+    if (data?.url) {
+      // Calculate center position for the popup
+      const width = 500;
+      const height = 600;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      
+      window.open(
+        data.url, 
+        "Google Login", 
+        `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=yes,resizable=yes`
+      );
+    }
+    
+    if (error) {
+      alert("Login failed. Please try again.");
+    }
   };
 
   const handleCopy = () => {
@@ -80,7 +113,7 @@ export default function Home() {
   };
 
   const handleGenerate = async () => {
-    // --- UPDATE: AUTO TRIGGER LOGIN ---
+    // Auto trigger popup login
     if (!user) {
       return handleLogin();
     }
@@ -190,14 +223,12 @@ export default function Home() {
             
             <p className="mt-4 text-sm text-slate-400">
               10 BDT per generation. {user ? `Balance: ${balance} ৳` : 
-                // --- UPDATE: TRIGGER LOGIN ON CLICK ---
                 <span className="text-blue-500 cursor-pointer hover:underline font-medium" onClick={handleLogin}>
                   Sign in to start
                 </span>
               }
             </p>
 
-            {/* Suggestions */}
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               {styles.map((style) => (
                 <button
