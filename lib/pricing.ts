@@ -1,3 +1,4 @@
+// lib/pricing.ts
 export const PRICING_RATES: Record<string, { input: number; output: number }> = {
   // Rate per 1 Million Tokens
   'gpt-5.1': { input: 1.25, output: 10.00 },
@@ -16,7 +17,7 @@ export const PRICING_RATES: Record<string, { input: number; output: number }> = 
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'gpt-3.5-turbo': { input: 0.50, output: 1.50 },
   
-  // Fallbacks
+  // Fallbacks for codex
   'gpt-5.1-codex': { input: 1.25, output: 10.00 },
   'gpt-5-codex': { input: 1.25, output: 10.00 },
   'gpt-5.1-codex-mini': { input: 0.25, output: 2.00 },
