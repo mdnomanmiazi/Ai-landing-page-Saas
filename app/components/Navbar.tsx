@@ -57,7 +57,7 @@ export default function Navbar() {
             <>
               <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full text-sm font-semibold text-slate-700">
                 <Wallet size={16} className="text-blue-600" />
-                <span>{balance} BDT</span>
+                <span>{balance} USD</span>
                 <Link href="/topup" className="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700">+ Add</Link>
               </div>
               <Link href="/dashboard" className="hidden md:block text-sm font-medium hover:text-blue-600">Dashboard</Link>
