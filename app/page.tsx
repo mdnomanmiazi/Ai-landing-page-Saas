@@ -118,7 +118,7 @@ export default function Home() {
         setGeneratedHtml((prev) => prev + chunkValue);
       }
 
-      // --- FIX: Correct Regex Syntax ---
+      // --- REGEX FIX HERE ---
       const costMatch = fullCode.match(//);
       const rawCost = costMatch ? parseFloat(costMatch[1]) : 0;
       
@@ -135,7 +135,6 @@ export default function Home() {
         const newBalance = balance - costWithMargin;
         await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
         setBalance(newBalance);
-        console.log(`Billed: $${costWithMargin.toFixed(6)}`);
       }
 
       const { data } = await supabase.from('generations').insert({
@@ -155,12 +154,12 @@ export default function Home() {
     }
   };
 
+  const progress = Math.min((generatedHtml.length / 15000) * 100, 98);
+
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-slate-900 font-sans selection:bg-yellow-200">
       <Navbar />
-      
       <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
-        
         {!generatedHtml && !loading && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] transition-all duration-500">
             <h1 className="text-4xl md:text-6xl font-extrabold text-slate-800 mb-3 text-center tracking-tight">
@@ -256,48 +255,22 @@ export default function Home() {
                   <div className="w-3 h-3 rounded-full bg-green-400"></div>
                 </div>
                 
-                <button 
-                  onClick={handleNew}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
-                >
-                  <Plus size={14} /> New
-                </button>
-                <button 
-                  onClick={handleGenerate}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
-                >
-                  <RefreshCw size={14} /> Regenerate
-                </button>
+                <button onClick={handleNew} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"><Plus size={14} /> New</button>
+                <button onClick={handleGenerate} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"><RefreshCw size={14} /> Regenerate</button>
               </div>
               
               <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-slate-400 mr-2">
-                  Balance: ${balance.toFixed(4)}
-                </span>
-                <button onClick={handleCopy} className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 px-3 py-2 rounded-lg transition-all">
-                  {copied ? <Check size={14} className="text-green-600"/> : <Copy size={14} />}
-                  {copied ? "Copied" : "Copy"}
-                </button>
+                <span className="text-xs font-mono text-slate-400 mr-2">Balance: ${balance.toFixed(4)}</span>
+                <button onClick={handleCopy} className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 px-3 py-2 rounded-lg transition-all">{copied ? <Check size={14} className="text-green-600"/> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
                 {generatedId && (
-                  <a href={`/view/${generatedId}`} target="_blank" className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-2 rounded-lg transition-all">
-                    <ExternalLink size={14} /> Full Screen
-                  </a>
+                  <a href={`/view/${generatedId}`} target="_blank" className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-2 rounded-lg transition-all"><ExternalLink size={14} /> Full Screen</a>
                 )}
               </div>
             </div>
 
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 relative w-full h-full">
-               <div className="bg-slate-950 p-4 overflow-auto custom-scrollbar border-r border-slate-800">
-                  <pre className="text-xs font-mono text-emerald-400 whitespace-pre-wrap">{generatedHtml}</pre>
-               </div>
-               
-               <div className="bg-white relative">
-                 <iframe 
-                   srcDoc={generatedHtml} 
-                   className="w-full h-full border-none" 
-                   title="Preview" 
-                 />
-               </div>
+               <div className="bg-slate-950 p-4 overflow-auto custom-scrollbar border-r border-slate-800"><pre className="text-xs font-mono text-emerald-400 whitespace-pre-wrap">{generatedHtml}</pre></div>
+               <div className="bg-white relative"><iframe srcDoc={generatedHtml} className="w-full h-full border-none" title="Preview" /></div>
             </div>
           </div>
         )}
@@ -306,17 +279,13 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[80vh]">
             <div className="bg-slate-950 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
               <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
-                <div className="flex items-center gap-2 text-slate-400">
-                  <Terminal size={16} />
-                  <span className="text-xs font-mono text-blue-400">streaming...</span>
-                </div>
+                <div className="flex items-center gap-2 text-slate-400"><Terminal size={16} /><span className="text-xs font-mono text-blue-400">streaming...</span></div>
               </div>
               <div className="p-4 font-mono text-xs text-emerald-400 overflow-y-auto flex-1 custom-scrollbar leading-relaxed">
                 <pre className="whitespace-pre-wrap break-words">{generatedHtml}<span className="inline-block w-2 h-4 bg-emerald-400 animate-pulse align-middle ml-1"></span></pre>
                 <div ref={codeEndRef} />
               </div>
             </div>
-
             <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 relative">
               <div className="flex-1 relative bg-white w-full h-full flex flex-col items-center justify-center">
                  <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
@@ -325,7 +294,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
       </main>
     </div>
   );
