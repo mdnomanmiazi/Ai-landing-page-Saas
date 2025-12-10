@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-// Force dynamic — prevent caching
+// Force dynamic — prevents same response caching
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export async function POST() {
+export async function GET() {
   try {
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -18,42 +19,28 @@ export async function POST() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
+      cache: "no-store",
       body: JSON.stringify({
-        model: "gpt-5-nano", // confirmed accessible
+        model: "gpt-5-mini",
         messages: [
           {
             role: "system",
             content:
-              "You generate simple landing page prompt ideas. Return ONLY: 'landing page for [topic]'. Very short (3–6 words)."
+              "Return ONLY a short website idea. Format: 'Landing page for a ___ portfolio — looks like ___'. Keep it under 12 words.",
           },
           {
             role: "user",
-            content:
-              "Give me one landing page idea in format: landing page for [topic]"
+            content: "Give me one unique website idea following the required format.",
           },
         ],
-        temperature: 1.1, // allows varied ideas
-        max_tokens: 25,
       }),
     });
 
     const data = await response.json();
 
-    // Handle OpenAI errors
-    if (data.error) {
-      console.error("OpenAI Error:", data.error);
-      return NextResponse.json(
-        { idea: "landing page for smart home devices" },
-        { status: 200 }
-      );
-    }
-
-    // Extract response safely
-    const raw = data.choices?.[0]?.message?.content?.trim();
     const idea =
-      raw && raw.toLowerCase().startsWith("landing page")
-        ? raw.toLowerCase()
-        : `landing page for ${raw?.toLowerCase() || "eco-friendly gadgets"}`;
+      data.choices?.[0]?.message?.content?.trim() ||
+      "Landing page for a modern portfolio — looks clean and minimal";
 
     return NextResponse.json(
       {
@@ -62,14 +49,19 @@ export async function POST() {
       },
       {
         headers: {
-          "Cache-Control": "no-store",
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       }
     );
-  } catch (err) {
-    console.error("Server Error:", err);
+  } catch (error) {
+    console.error("Idea Error:", error);
     return NextResponse.json(
-      { idea: "landing page for smart home devices" },
+      {
+        idea: "Landing page for a digital creator — looks bright and futuristic",
+      },
       { status: 200 }
     );
   }
