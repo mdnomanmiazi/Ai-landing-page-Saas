@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 
+// Force dynamic — prevent caching
 export const dynamic = "force-dynamic";
 
 export async function POST() {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: "OpenAI API Key is missing" }, { status: 500 });
+      return NextResponse.json(
+        { error: "OpenAI API Key is missing" },
+        { status: 500 }
+      );
     }
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -15,7 +19,7 @@ export async function POST() {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-5-nano",
+        model: "gpt-5-nano", // confirmed accessible
         messages: [
           {
             role: "system",
@@ -24,26 +28,27 @@ export async function POST() {
           },
           {
             role: "user",
-            content: "Give me one landing page idea in format: landing page for [topic]"
+            content:
+              "Give me one landing page idea in format: landing page for [topic]"
           },
         ],
-        temperature: 1.1,
+        temperature: 1.1, // allows varied ideas
         max_tokens: 25,
       }),
     });
 
     const data = await response.json();
 
-    // HANDLE ERRORS PROPERLY
+    // Handle OpenAI errors
     if (data.error) {
-      console.log("OpenAI Error:", data.error);
+      console.error("OpenAI Error:", data.error);
       return NextResponse.json(
         { idea: "landing page for smart home devices" },
         { status: 200 }
       );
     }
 
-    // PROPER extraction
+    // Extract response safely
     const raw = data.choices?.[0]?.message?.content?.trim();
     const idea =
       raw && raw.toLowerCase().startsWith("landing page")
