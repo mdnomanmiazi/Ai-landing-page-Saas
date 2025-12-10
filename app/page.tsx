@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
-import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, ArrowUp, Shuffle, SlidersHorizontal, Plus, RefreshCw, Zap } from 'lucide-react';
+import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, ArrowUp, Shuffle, SlidersHorizontal, Plus, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
@@ -82,9 +82,9 @@ export default function Home() {
   const handleGenerate = async () => {
     if (!user) return handleLogin();
     
-    // Check balance (Minimum $0.01)
-    if (balance < 0.01) {
-      if(confirm(`Insufficient balance ($${balance.toFixed(4)}). Top Up?`)) {
+    // Basic Gatekeeping: Don't allow generation if balance is 0 or negative
+    if (balance <= 0) {
+      if(confirm(`Insufficient balance. Please add funds. Top Up?`)) {
         router.push('/topup');
       }
       return;
@@ -99,7 +99,11 @@ export default function Home() {
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, model: selectedModel }),
+        body: JSON.stringify({ 
+          prompt, 
+          model: selectedModel,
+          userId: user.id 
+        }),
       });
 
       if (!response.ok) throw new Error(response.statusText);
@@ -119,33 +123,11 @@ export default function Home() {
         setGeneratedHtml((prev) => prev + chunkValue);
       }
 
-      // --- CRITICAL BILLING LOGIC ---
-      
-      // 1. Find the Hidden Cost Tag using RegExp constructor (Safe for Next.js build)
-      const costRegex = new RegExp("");
-      const costMatch = fullCode.match(costRegex);
-      const rawCost = costMatch ? parseFloat(costMatch[1]) : 0;
-      
-      // 2. Add 10% Profit Margin
-      const costWithMargin = rawCost > 0 ? (rawCost * 1.10) : 0;
-
-      // 3. Remove the tag from the final code
-      let cleanHtml = fullCode.replace(costRegex, "");
-      cleanHtml = cleanHtml.replace(/```html|```/g, "").trim();
-      
+      // Cleanup Markdown
+      const cleanHtml = fullCode.replace(/```html|```/g, "").trim();
       setGeneratedHtml(cleanHtml);
 
-      // 4. Deduct Balance
-      if (costWithMargin > 0) {
-        const newBalance = balance - costWithMargin;
-        await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
-        setBalance(newBalance);
-        console.log(`Charged: $${costWithMargin.toFixed(6)} (Raw: $${rawCost.toFixed(6)})`);
-      } else {
-        console.error("Billing Failed: No cost detected in stream.");
-      }
-
-      // 5. Save to History
+      // Save to History (Frontend convenience)
       const { data } = await supabase.from('generations').insert({
         user_id: user.id,
         prompt: prompt,
@@ -153,6 +135,9 @@ export default function Home() {
       }).select().single();
 
       if (data) setGeneratedId(data.id);
+
+      // Refresh balance after a short delay (allowing n8n to process)
+      setTimeout(() => checkBalance(user.id), 3000);
 
     } catch (error) {
       console.error(error);
@@ -187,49 +172,28 @@ export default function Home() {
               
               <div className="flex justify-between items-end mt-2 px-2 relative">
                 <div className="flex items-center gap-2">
-                  <button 
-                    onClick={handleGetIdea}
-                    disabled={ideaLoading}
-                    className="flex items-center gap-2 bg-yellow-50 text-yellow-700 border border-yellow-200 px-4 py-2 rounded-full text-sm font-bold hover:bg-yellow-100 transition-colors"
-                  >
+                  <button onClick={handleGetIdea} disabled={ideaLoading} className="flex items-center gap-2 bg-yellow-50 text-yellow-700 border border-yellow-200 px-4 py-2 rounded-full text-sm font-bold hover:bg-yellow-100 transition-colors">
                     <Shuffle size={16} className={ideaLoading ? "animate-spin" : ""} />
                     {ideaLoading ? "Thinking..." : "Give me an idea"}
                   </button>
 
                   <div className="relative">
-                    <button 
-                      onClick={() => setShowModelMenu(!showModelMenu)}
-                      className="flex items-center gap-2 bg-slate-50 text-slate-600 border border-slate-200 px-3 py-2 rounded-full text-sm font-bold hover:bg-slate-100 transition-colors"
-                      title="Select AI Model"
-                    >
+                    <button onClick={() => setShowModelMenu(!showModelMenu)} className="flex items-center gap-2 bg-slate-50 text-slate-600 border border-slate-200 px-3 py-2 rounded-full text-sm font-bold hover:bg-slate-100 transition-colors">
                       <SlidersHorizontal size={16} />
                       <span className="hidden sm:inline text-xs uppercase tracking-wide">{selectedModel}</span>
                     </button>
-
                     {showModelMenu && (
                       <div className="absolute bottom-12 left-0 w-56 bg-white border border-slate-200 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-200 origin-bottom-left max-h-60 overflow-y-auto custom-scrollbar">
                         <div className="text-xs font-bold text-slate-400 px-3 py-2 uppercase tracking-wider">Select Model</div>
                         {models.map((m) => (
-                          <button
-                            key={m}
-                            onClick={() => { setSelectedModel(m); setShowModelMenu(false); }}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              selectedModel === m ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                          >
-                            {m}
-                          </button>
+                          <button key={m} onClick={() => { setSelectedModel(m); setShowModelMenu(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedModel === m ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}>{m}</button>
                         ))}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <button 
-                  onClick={handleGenerate}
-                  disabled={!prompt || loading}
-                  className="bg-yellow-400 hover:bg-yellow-500 text-slate-900 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                >
+                <button onClick={handleGenerate} disabled={!prompt || loading} className="bg-yellow-400 hover:bg-yellow-500 text-slate-900 w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
                   <ArrowUp size={28} strokeWidth={2.5} />
                 </button>
               </div>
