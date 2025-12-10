@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
-import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, ArrowUp, Shuffle, SlidersHorizontal } from 'lucide-react'; // Added SlidersHorizontal
+import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, ArrowUp, Shuffle, SlidersHorizontal, Plus, RefreshCw, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
@@ -10,33 +10,27 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [ideaLoading, setIdeaLoading] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [balance, setBalance] = useState(0);
+  const [balance, setBalance] = useState(0); // Stores USD
   const [generatedId, setGeneratedId] = useState<string | null>(null);
   
-  // --- NEW: MODEL SELECTION STATE ---
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-5');
 
+  // Full Model List
   const models = [
-    "gpt-5.1",
-    "gpt-5",
-    "gpt-5-mini",
-    "gpt-5-nano",
-    "gpt-5-pro",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
-    "gpt-4-turbo",
-    "gpt-4",
-    "gpt-4o",
-    "gpt-4o-mini",
-    "gpt-3.5-turbo",
+    "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-pro",
+    "gpt-5.1-codex", "gpt-5-codex", "gpt-5.1-codex-mini",
+    "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+    "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"
   ];
 
   const router = useRouter();
+  const codeEndRef = useRef<HTMLDivElement>(null);
 
+  // --- AUTH & BALANCE ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -46,18 +40,24 @@ export default function Home() {
 
   const checkBalance = async (userId: string) => {
     const { data } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-    if (data) setBalance(data.balance);
+    if (data) setBalance(data.balance); // Balance is in USD
   };
 
   const handleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/`,
-      },
+      options: { redirectTo: `${window.location.origin}/` },
     });
   };
 
+  // --- SCROLLING ---
+  useEffect(() => {
+    if (isStreaming) {
+      codeEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [generatedHtml, isStreaming]);
+
+  // --- HELPERS ---
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedHtml);
     setCopied(true);
@@ -77,14 +77,26 @@ export default function Home() {
     }
   };
 
+  const handleNew = () => {
+    setGeneratedHtml("");
+    setPrompt("");
+    setGeneratedId(null);
+  };
+
+  // --- CORE GENERATION LOGIC ---
   const handleGenerate = async () => {
     if (!user) return handleLogin();
-    if (balance < 10) {
-      if(confirm("Insufficient balance (Cost: 10 BDT). Go to Top Up?")) router.push('/topup');
+    
+    // 1. MINIMUM BALANCE CHECK (Must have at least $0.01 to start)
+    if (balance < 0.01) {
+      if(confirm(`Insufficient balance ($${balance.toFixed(4)}). Minimum required is $0.01. Top Up?`)) {
+        router.push('/topup');
+      }
       return;
     }
     
     setLoading(true);
+    setIsStreaming(true);
     setGeneratedHtml("");
     setGeneratedId(null);
 
@@ -93,39 +105,76 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          prompt,
-          model: selectedModel // --- SEND SELECTED MODEL ---
+          prompt, 
+          model: selectedModel 
         }),
       });
 
-      const data = await response.json();
+      if (!response.ok) throw new Error(response.statusText);
 
-      if (data.error) throw new Error(data.error.message || data.error);
-      if (!data.html) throw new Error("No HTML returned");
+      const reader = response.body?.getReader();
+      if (!reader) return;
 
-      setGeneratedHtml(data.html);
+      const decoder = new TextDecoder();
+      let done = false;
+      let fullCode = "";
 
-      // Deduct Balance
-      const newBalance = balance - 10;
-      await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
-      setBalance(newBalance);
+      // Stream Loop
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        const chunkValue = decoder.decode(value);
+        fullCode += chunkValue;
+        setGeneratedHtml((prev) => prev + chunkValue);
+      }
 
-      // Save History
-      const { data: inserted } = await supabase.from('generations').insert({
+      // 2. EXTRACT COST & APPLY MARGIN
+      // Look for the hidden tag sent by backend
+      const costMatch = fullCode.match(//);
+      const rawCost = costMatch ? parseFloat(costMatch[1]) : 0;
+      
+      // APPLY 10% PROFIT MARGIN
+      const costWithMargin = rawCost * 1.10; 
+
+      // Remove the cost tag and markdown from the final code
+      const cleanHtml = fullCode
+        .replace(//, "")
+        .replace(/```html|```/g, "")
+        .trim();
+      
+      setGeneratedHtml(cleanHtml);
+
+      // 3. DEDUCT BALANCE (Allow negative)
+      if (costWithMargin > 0) {
+        const newBalance = balance - costWithMargin;
+        
+        // Update Supabase
+        await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
+        
+        // Update Local State
+        setBalance(newBalance);
+        console.log(`Raw Cost: $${rawCost.toFixed(6)} | Billed: $${costWithMargin.toFixed(6)}`);
+      }
+
+      // 4. SAVE TO HISTORY
+      const { data } = await supabase.from('generations').insert({
         user_id: user.id,
         prompt: prompt,
-        html_code: data.html
+        html_code: cleanHtml,
       }).select().single();
 
-      if (inserted) setGeneratedId(inserted.id);
+      if (data) setGeneratedId(data.id);
 
     } catch (error) {
       console.error(error);
-      alert("Error generating website. Try a different model or prompt.");
+      alert("Error generating website. Please try again.");
     } finally {
       setLoading(false);
+      setIsStreaming(false);
     }
   };
+
+  const progress = Math.min((generatedHtml.length / 15000) * 100, 98);
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-slate-900 font-sans selection:bg-yellow-200">
@@ -162,7 +211,7 @@ export default function Home() {
                     {ideaLoading ? "Thinking..." : "Give me an idea"}
                   </button>
 
-                  {/* --- NEW: MODEL SELECTOR BUTTON --- */}
+                  {/* MODEL SELECTOR */}
                   <div className="relative">
                     <button 
                       onClick={() => setShowModelMenu(!showModelMenu)}
@@ -173,23 +222,20 @@ export default function Home() {
                       <span className="hidden sm:inline text-xs uppercase tracking-wide">{selectedModel}</span>
                     </button>
 
-                    {/* MODEL DROPDOWN MENU */}
                     {showModelMenu && (
-                      <div className="absolute bottom-12 left-0 w-56 bg-white border border-slate-200 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-200 origin-bottom-left">
+                      <div className="absolute bottom-12 left-0 w-56 bg-white border border-slate-200 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-200 origin-bottom-left max-h-60 overflow-y-auto custom-scrollbar">
                         <div className="text-xs font-bold text-slate-400 px-3 py-2 uppercase tracking-wider">Select Model</div>
-                        <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                          {models.map((m) => (
-                            <button
-                              key={m}
-                              onClick={() => { setSelectedModel(m); setShowModelMenu(false); }}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                selectedModel === m ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'
-                              }`}
-                            >
-                              {m}
-                            </button>
-                          ))}
-                        </div>
+                        {models.map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => { setSelectedModel(m); setShowModelMenu(false); }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              selectedModel === m ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -207,7 +253,7 @@ export default function Home() {
             </div>
             
             <p className="mt-6 text-sm font-medium text-slate-400">
-              10 BDT per generation. {user ? <span className="text-slate-600">Balance: {balance} ৳</span> : <span className="text-blue-600 cursor-pointer hover:underline" onClick={handleLogin}>Sign in to start</span>}
+              Pay per usage. {user ? <span className="text-slate-600">Balance: <span className="font-mono text-slate-900">${balance.toFixed(4)}</span></span> : <span className="text-blue-600 cursor-pointer hover:underline" onClick={handleLogin}>Sign in to start</span>}
             </p>
           </div>
         )}
@@ -226,24 +272,36 @@ export default function Home() {
           </div>
         )}
 
-        {/* --- RESULTS PREVIEW --- */}
+        {/* --- PREVIEW WORKSPACE --- */}
         {generatedHtml && !loading && (
           <div className="h-[85vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700">
             {/* Toolbar */}
             <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1.5 mr-4">
+              <div className="flex items-center gap-4">
+                <div className="flex gap-1.5 mr-2">
                   <div className="w-3 h-3 rounded-full bg-red-400"></div>
                   <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
                   <div className="w-3 h-3 rounded-full bg-green-400"></div>
                 </div>
-                <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-md text-xs font-mono text-slate-500">
-                  <Terminal size={12} />
-                  <span>index.html</span>
-                </div>
+                
+                <button 
+                  onClick={handleNew}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+                >
+                  <Plus size={14} /> New
+                </button>
+                <button 
+                  onClick={handleGenerate}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
+                >
+                  <RefreshCw size={14} /> Regenerate
+                </button>
               </div>
               
               <div className="flex items-center gap-3">
+                <span className="text-xs font-mono text-slate-400 mr-2">
+                  Balance: ${balance.toFixed(4)}
+                </span>
                 <button onClick={handleCopy} className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 px-3 py-2 rounded-lg transition-all">
                   {copied ? <Check size={14} className="text-green-600"/> : <Copy size={14} />}
                   {copied ? "Copied" : "Copy"}
@@ -253,19 +311,51 @@ export default function Home() {
                     <ExternalLink size={14} /> Full Screen
                   </a>
                 )}
-                <button onClick={() => setGeneratedHtml('')} className="flex items-center gap-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-lg transition-all shadow-sm">
-                  <Sparkles size={14} /> New
-                </button>
               </div>
             </div>
 
-            {/* Iframe */}
-            <div className="flex-1 bg-slate-100 relative w-full h-full">
-               <iframe 
-                 srcDoc={generatedHtml} 
-                 className="w-full h-full border-none" 
-                 title="Preview" 
-               />
+            {/* Split View */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 relative w-full h-full">
+               {/* Code */}
+               <div className="bg-slate-950 p-4 overflow-auto custom-scrollbar border-r border-slate-800">
+                  <pre className="text-xs font-mono text-emerald-400 whitespace-pre-wrap">{generatedHtml}</pre>
+               </div>
+               
+               {/* Preview */}
+               <div className="bg-white relative">
+                 <iframe 
+                   srcDoc={generatedHtml} 
+                   className="w-full h-full border-none" 
+                   title="Preview" 
+                 />
+               </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- STREAMING STATE (Only visible during stream) --- */}
+        {isStreaming && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[80vh]">
+            {/* Terminal */}
+            <div className="bg-slate-950 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
+              <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
+                <div className="flex items-center gap-2 text-slate-400">
+                  <Terminal size={16} />
+                  <span className="text-xs font-mono text-blue-400">streaming...</span>
+                </div>
+              </div>
+              <div className="p-4 font-mono text-xs text-emerald-400 overflow-y-auto flex-1 custom-scrollbar leading-relaxed">
+                <pre className="whitespace-pre-wrap break-words">{generatedHtml}<span className="inline-block w-2 h-4 bg-emerald-400 animate-pulse align-middle ml-1"></span></pre>
+                <div ref={codeEndRef} />
+              </div>
+            </div>
+
+            {/* Loading Preview */}
+            <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 relative">
+              <div className="flex-1 relative bg-white w-full h-full flex flex-col items-center justify-center">
+                 <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                 <p className="text-sm font-semibold text-slate-500 animate-pulse">AI is coding...</p>
+              </div>
             </div>
           </div>
         )}
