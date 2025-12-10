@@ -15,6 +15,7 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [balance, setBalance] = useState(0);
   const [generatedId, setGeneratedId] = useState<string | null>(null);
+  
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-5');
 
@@ -81,7 +82,7 @@ export default function Home() {
   const handleGenerate = async () => {
     if (!user) return handleLogin();
     
-    // Check balance (Must have > $0.01)
+    // Check balance (Minimum $0.01)
     if (balance < 0.01) {
       if(confirm(`Insufficient balance ($${balance.toFixed(4)}). Top Up?`)) {
         router.push('/topup');
@@ -118,30 +119,33 @@ export default function Home() {
         setGeneratedHtml((prev) => prev + chunkValue);
       }
 
-      // --- CRITICAL FIX: Safe Regex Extraction ---
+      // --- CRITICAL BILLING LOGIC ---
+      
+      // 1. Find the Hidden Cost Tag using RegExp constructor (Safe for Next.js build)
       const costRegex = new RegExp("");
       const costMatch = fullCode.match(costRegex);
       const rawCost = costMatch ? parseFloat(costMatch[1]) : 0;
       
-      // Apply 10% Margin
-      const costWithMargin = rawCost > 0 ? (rawCost * 1.10) : 0; 
+      // 2. Add 10% Profit Margin
+      const costWithMargin = rawCost > 0 ? (rawCost * 1.10) : 0;
 
-      // Clean the code
+      // 3. Remove the tag from the final code
       let cleanHtml = fullCode.replace(costRegex, "");
       cleanHtml = cleanHtml.replace(/```html|```/g, "").trim();
       
       setGeneratedHtml(cleanHtml);
 
+      // 4. Deduct Balance
       if (costWithMargin > 0) {
         const newBalance = balance - costWithMargin;
         await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
         setBalance(newBalance);
-        // Toast log to confirm deduction
-        console.log(`Deducted: $${costWithMargin.toFixed(6)}`);
+        console.log(`Charged: $${costWithMargin.toFixed(6)} (Raw: $${rawCost.toFixed(6)})`);
       } else {
-        console.warn("No cost detected, no deduction made.");
+        console.error("Billing Failed: No cost detected in stream.");
       }
 
+      // 5. Save to History
       const { data } = await supabase.from('generations').insert({
         user_id: user.id,
         prompt: prompt,
