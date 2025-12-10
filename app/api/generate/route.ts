@@ -37,13 +37,10 @@ export async function POST(req: Request) {
     }
 
     const images = await getUnsplashImages(prompt);
-
-    let imageInstruction = "";
-    if (images.length > 0) {
-      imageInstruction = `### IMAGE ASSETS: Use these: ${JSON.stringify(
-        images
-      )}`;
-    }
+    const imageInstruction =
+      images.length > 0
+        ? `### IMAGE ASSETS: Use these: ${JSON.stringify(images)}`
+        : "";
 
     const systemPrompt = `
       You are a world-class Frontend Engineer.
@@ -85,7 +82,6 @@ export async function POST(req: Request) {
 
     if (!response.ok) throw new Error(response.statusText);
 
-    // Webhook for n8n
     const WEBHOOK_URL =
       "https://n8n.ieltsai.net/webhook-test/1aaa265e-8861-4bb7-b2d7-62019de6b0e4";
 
@@ -98,7 +94,6 @@ export async function POST(req: Request) {
         }
 
         const decoder = new TextDecoder();
-
         let finalUsage: any = null;
 
         while (true) {
@@ -115,14 +110,14 @@ export async function POST(req: Request) {
             try {
               const json = JSON.parse(line.slice(6));
 
-              // A. Stream HTML content to client
+              // Stream HTML content to client
               const content = json.choices?.[0]?.delta?.content || "";
               if (content) {
                 estimatedOutputTokens += Math.ceil(content.length / 3.5);
                 controller.enqueue(new TextEncoder().encode(content));
               }
 
-              // B. Official OpenAI Usage
+              // Capture OpenAI usage
               if (json.usage) {
                 usageSent = true;
                 finalUsage = json.usage;
@@ -131,7 +126,7 @@ export async function POST(req: Request) {
           }
         }
 
-        // C. Prepare final usage object
+        // Prepare final usage object
         let usageToSend = finalUsage;
 
         if (!usageSent) {
@@ -142,19 +137,19 @@ export async function POST(req: Request) {
           };
         }
 
-        // D. Compute cost
+        // Compute total cost using your calculateCost function
         const totalCost = calculateCost(
           model || "gpt-5",
           usageToSend.prompt_tokens,
           usageToSend.completion_tokens
         );
 
-        // E. Send usage to n8n webhook
+        // Send usage + cost + userId to n8n webhook
         await fetch(WEBHOOK_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: userId || null,
+            userId: userId || null, // Include userId
             model: model || "gpt-5",
             prompt,
             usage: usageToSend,
