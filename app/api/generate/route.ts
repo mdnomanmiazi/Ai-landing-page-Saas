@@ -2,7 +2,9 @@
 export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
-import { calculateCost } from "../../../lib/pricing";
+
+// Your n8n Webhook URL
+const WEBHOOK_URL = "https://n8n.ieltsai.net/webhook-test/1aaa265e-8861-4bb7-b2d7-62019de6b0e4";
 
 async function getUnsplashImages(query: string): Promise<string[]> {
   try {
@@ -36,12 +38,14 @@ export async function POST(req: Request) {
       );
     }
 
+    // 1. Get Images
     const images = await getUnsplashImages(prompt);
     const imageInstruction =
       images.length > 0
         ? `### IMAGE ASSETS: Use these: ${JSON.stringify(images)}`
         : "";
 
+    // 2. System Prompt
     const systemPrompt = `
       You are a world-class Frontend Engineer.
       Generate a complete, production-ready landing page as a single HTML file.
@@ -53,13 +57,7 @@ export async function POST(req: Request) {
       ${imageInstruction}
     `;
 
-    // Estimate input tokens for fallback
-    const estimatedInputTokens = Math.ceil(
-      (systemPrompt.length + prompt.length) / 4
-    );
-    let estimatedOutputTokens = 0;
-    let usageSent = false;
-
+    // 3. Call OpenAI
     const response = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -82,9 +80,7 @@ export async function POST(req: Request) {
 
     if (!response.ok) throw new Error(response.statusText);
 
-    const WEBHOOK_URL =
-      "https://n8n.ieltsai.net/webhook-test/1aaa265e-8861-4bb7-b2d7-62019de6b0e4";
-
+    // 4. Stream Response & Capture Usage for n8n
     const stream = new ReadableStream({
       async start(controller) {
         const reader = response.body?.getReader();
@@ -110,53 +106,35 @@ export async function POST(req: Request) {
             try {
               const json = JSON.parse(line.slice(6));
 
-              // Stream HTML content to client
+              // Stream Content to Frontend
               const content = json.choices?.[0]?.delta?.content || "";
               if (content) {
-                estimatedOutputTokens += Math.ceil(content.length / 3.5);
                 controller.enqueue(new TextEncoder().encode(content));
               }
 
-              // Capture OpenAI usage
+              // Capture Usage Object
               if (json.usage) {
-                usageSent = true;
                 finalUsage = json.usage;
               }
             } catch {}
           }
         }
 
-        // Prepare final usage object
-        let usageToSend = finalUsage;
-
-        if (!usageSent) {
-          usageToSend = {
-            prompt_tokens: estimatedInputTokens,
-            completion_tokens: estimatedOutputTokens,
-            total_tokens: estimatedInputTokens + estimatedOutputTokens,
-          };
+        // 5. Send Usage to n8n (Async - Fire and Forget)
+        // n8n will handle the logic: Calculate Cost -> Deduct from Supabase
+        if (userId && finalUsage) {
+            fetch(WEBHOOK_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userId: userId,
+                    model: model || "gpt-5",
+                    usage: finalUsage,
+                    prompt: prompt.slice(0, 500),
+                    timestamp: new Date().toISOString(),
+                }),
+            }).catch(e => console.error("n8n Webhook Error:", e));
         }
-
-        // Compute total cost using your calculateCost function
-        const totalCost = calculateCost(
-          model || "gpt-5",
-          usageToSend.prompt_tokens,
-          usageToSend.completion_tokens
-        );
-
-        // Send usage + cost + userId to n8n webhook
-        await fetch(WEBHOOK_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: userId || null, // Include userId
-            model: model || "gpt-5",
-            prompt,
-            usage: usageToSend,
-            cost: totalCost,
-            timestamp: new Date().toISOString(),
-          }),
-        });
 
         controller.close();
       },
