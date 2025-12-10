@@ -13,13 +13,12 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [balance, setBalance] = useState(0); // Stores USD
+  const [balance, setBalance] = useState(0);
   const [generatedId, setGeneratedId] = useState<string | null>(null);
   
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-5');
 
-  // Full Model List
   const models = [
     "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5-pro",
     "gpt-5.1-codex", "gpt-5-codex", "gpt-5.1-codex-mini",
@@ -30,7 +29,6 @@ export default function Home() {
   const router = useRouter();
   const codeEndRef = useRef<HTMLDivElement>(null);
 
-  // --- AUTH & BALANCE ---
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -40,7 +38,7 @@ export default function Home() {
 
   const checkBalance = async (userId: string) => {
     const { data } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-    if (data) setBalance(data.balance); // Balance is in USD
+    if (data) setBalance(data.balance);
   };
 
   const handleLogin = async () => {
@@ -50,14 +48,12 @@ export default function Home() {
     });
   };
 
-  // --- SCROLLING ---
   useEffect(() => {
     if (isStreaming) {
       codeEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [generatedHtml, isStreaming]);
 
-  // --- HELPERS ---
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedHtml);
     setCopied(true);
@@ -83,11 +79,9 @@ export default function Home() {
     setGeneratedId(null);
   };
 
-  // --- CORE GENERATION LOGIC ---
   const handleGenerate = async () => {
     if (!user) return handleLogin();
     
-    // 1. MINIMUM BALANCE CHECK (Must have at least $0.01 to start)
     if (balance < 0.01) {
       if(confirm(`Insufficient balance ($${balance.toFixed(4)}). Minimum required is $0.01. Top Up?`)) {
         router.push('/topup');
@@ -104,10 +98,7 @@ export default function Home() {
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          prompt, 
-          model: selectedModel 
-        }),
+        body: JSON.stringify({ prompt, model: selectedModel }),
       });
 
       if (!response.ok) throw new Error(response.statusText);
@@ -119,7 +110,6 @@ export default function Home() {
       let done = false;
       let fullCode = "";
 
-      // Stream Loop
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
@@ -128,15 +118,12 @@ export default function Home() {
         setGeneratedHtml((prev) => prev + chunkValue);
       }
 
-      // 2. EXTRACT COST & APPLY MARGIN
-      // Look for the hidden tag sent by backend
+      // --- FIX: Correct Regex Syntax ---
       const costMatch = fullCode.match(//);
       const rawCost = costMatch ? parseFloat(costMatch[1]) : 0;
       
-      // APPLY 10% PROFIT MARGIN
       const costWithMargin = rawCost * 1.10; 
 
-      // Remove the cost tag and markdown from the final code
       const cleanHtml = fullCode
         .replace(//, "")
         .replace(/```html|```/g, "")
@@ -144,19 +131,13 @@ export default function Home() {
       
       setGeneratedHtml(cleanHtml);
 
-      // 3. DEDUCT BALANCE (Allow negative)
       if (costWithMargin > 0) {
         const newBalance = balance - costWithMargin;
-        
-        // Update Supabase
         await supabase.from('profiles').update({ balance: newBalance }).eq('id', user.id);
-        
-        // Update Local State
         setBalance(newBalance);
-        console.log(`Raw Cost: $${rawCost.toFixed(6)} | Billed: $${costWithMargin.toFixed(6)}`);
+        console.log(`Billed: $${costWithMargin.toFixed(6)}`);
       }
 
-      // 4. SAVE TO HISTORY
       const { data } = await supabase.from('generations').insert({
         user_id: user.id,
         prompt: prompt,
@@ -167,14 +148,12 @@ export default function Home() {
 
     } catch (error) {
       console.error(error);
-      alert("Error generating website. Please try again.");
+      alert("Error generating website.");
     } finally {
       setLoading(false);
       setIsStreaming(false);
     }
   };
-
-  const progress = Math.min((generatedHtml.length / 15000) * 100, 98);
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-slate-900 font-sans selection:bg-yellow-200">
@@ -182,7 +161,6 @@ export default function Home() {
       
       <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
         
-        {/* --- INPUT SECTION --- */}
         {!generatedHtml && !loading && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] transition-all duration-500">
             <h1 className="text-4xl md:text-6xl font-extrabold text-slate-800 mb-3 text-center tracking-tight">
@@ -201,7 +179,6 @@ export default function Home() {
               
               <div className="flex justify-between items-end mt-2 px-2 relative">
                 <div className="flex items-center gap-2">
-                  {/* IDEA BUTTON */}
                   <button 
                     onClick={handleGetIdea}
                     disabled={ideaLoading}
@@ -211,7 +188,6 @@ export default function Home() {
                     {ideaLoading ? "Thinking..." : "Give me an idea"}
                   </button>
 
-                  {/* MODEL SELECTOR */}
                   <div className="relative">
                     <button 
                       onClick={() => setShowModelMenu(!showModelMenu)}
@@ -241,7 +217,6 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* GENERATE BUTTON */}
                 <button 
                   onClick={handleGenerate}
                   disabled={!prompt || loading}
@@ -258,7 +233,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* --- LOADING STATE --- */}
         {loading && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in duration-700">
             <div className="relative mb-8">
@@ -272,10 +246,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* --- PREVIEW WORKSPACE --- */}
         {generatedHtml && !loading && (
           <div className="h-[85vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700">
-            {/* Toolbar */}
             <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex gap-1.5 mr-2">
@@ -314,14 +286,11 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Split View */}
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 relative w-full h-full">
-               {/* Code */}
                <div className="bg-slate-950 p-4 overflow-auto custom-scrollbar border-r border-slate-800">
                   <pre className="text-xs font-mono text-emerald-400 whitespace-pre-wrap">{generatedHtml}</pre>
                </div>
                
-               {/* Preview */}
                <div className="bg-white relative">
                  <iframe 
                    srcDoc={generatedHtml} 
@@ -333,10 +302,8 @@ export default function Home() {
           </div>
         )}
 
-        {/* --- STREAMING STATE (Only visible during stream) --- */}
         {isStreaming && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[80vh]">
-            {/* Terminal */}
             <div className="bg-slate-950 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
               <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
                 <div className="flex items-center gap-2 text-slate-400">
@@ -350,7 +317,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Loading Preview */}
             <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 relative">
               <div className="flex-1 relative bg-white w-full h-full flex flex-col items-center justify-center">
                  <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
