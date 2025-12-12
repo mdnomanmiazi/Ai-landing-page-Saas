@@ -11,14 +11,10 @@ async function getUnsplashImages(query: string): Promise<string[]> {
     const apiKey = process.env.UNSPLASH_ACCESS_KEY;
     if (!apiKey) return [];
     const searchTerm = query.split(" ").slice(0, 5).join(" ");
-
     const res = await fetch(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
-        searchTerm
-      )}&per_page=6&orientation=landscape&content_filter=high`,
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchTerm)}&per_page=6&orientation=landscape&content_filter=high`,
       { headers: { Authorization: `Client-ID ${apiKey}` } }
     );
-
     if (!res.ok) return [];
     const data = await res.json();
     return data.results.map((img: any) => img.urls.regular);
@@ -36,16 +32,13 @@ export async function POST(req: Request) {
     }
 
     const images = await getUnsplashImages(prompt);
-    const imageInstruction = images.length > 0
-      ? `### IMAGE ASSETS: Use these: ${JSON.stringify(images)}`
-      : "";
+    const imageInstruction = images.length > 0 ? `### IMAGE ASSETS: Use these: ${JSON.stringify(images)}` : "";
 
     const systemPrompt = `
       You are a world-class Frontend Engineer.
       Generate a complete, production-ready landing page as a single HTML file.
       REQUIREMENTS:
-      - Use Tailwind CSS via CDN.
-      - Use Lucide Icons via CDN.
+      - Use Tailwind CSS and Lucide Icons via CDN.
       - Use Google Fonts.
       - RETURN ONLY RAW HTML.
       ${imageInstruction}
@@ -58,27 +51,25 @@ export async function POST(req: Request) {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: model || "gpt-5",
+        model: model || "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: prompt },
         ],
         stream: true,
-        stream_options: { include_usage: true },
+        stream_options: { include_usage: true }, // This makes OpenAI send the usage data
       }),
     });
 
     if (!response.ok) throw new Error(response.statusText);
 
-    // Fallback usage tracking
-    const estimatedInputTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);
-    let estimatedOutputTokens = 0;
-    let usageSent = false;
-
     const stream = new ReadableStream({
       async start(controller) {
         const reader = response.body?.getReader();
-        if (!reader) { controller.close(); return; }
+        if (!reader) {
+          controller.close();
+          return;
+        }
 
         const decoder = new TextDecoder();
         let finalUsage: any = null;
@@ -97,44 +88,33 @@ export async function POST(req: Request) {
             try {
               const json = JSON.parse(line.slice(6));
 
-              // Stream Content
+              // 1. Send HTML to Frontend
               const content = json.choices?.[0]?.delta?.content || "";
               if (content) {
-                estimatedOutputTokens += Math.ceil(content.length / 3.5);
                 controller.enqueue(new TextEncoder().encode(content));
               }
 
-              // Capture Usage
+              // 2. Capture Usage (Comes in the very last chunk)
               if (json.usage) {
-                usageSent = true;
                 finalUsage = json.usage;
               }
             } catch {}
           }
         }
 
-        // Prepare Final Usage Data for n8n
-        if (!usageSent || !finalUsage) {
-          finalUsage = {
-            prompt_tokens: estimatedInputTokens,
-            completion_tokens: estimatedOutputTokens,
-            total_tokens: estimatedInputTokens + estimatedOutputTokens,
-          };
-        }
-
-        // FIRE WEBHOOK TO N8N (Calculates price & deducts balance)
-        if (userId) {
-            fetch(WEBHOOK_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userId: userId,
-                    model: model || "gpt-5",
-                    usage: finalUsage,
-                    prompt: prompt.slice(0, 500),
-                    timestamp: new Date().toISOString(),
-                }),
-            }).catch(e => console.error("n8n Error:", e));
+        // 3. SEND TO n8n (The deduction happens here)
+        if (userId && finalUsage) {
+          await fetch(WEBHOOK_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId,
+              model: model || "gpt-5-mini",
+              usage: finalUsage, // This contains prompt_tokens and completion_tokens
+              prompt,
+              timestamp: new Date().toISOString(),
+            }),
+          }).catch(e => console.error("n8n Webhook failed", e));
         }
 
         controller.close();
@@ -142,7 +122,6 @@ export async function POST(req: Request) {
     });
 
     return new NextResponse(stream, { headers: { "Content-Type": "text/plain" } });
-
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Server Error" }, { status: 500 });
   }
