@@ -182,7 +182,7 @@ export default function Home() {
             <h1 className="text-4xl md:text-6xl font-extrabold text-slate-800 mb-3 text-center tracking-tight">
               Your AI Cofounder. <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500">At your service.</span>
             </h1>
-            <p className="text-slate-500 mb-10 text-lg font-medium">Generate production-ready websites in seconds.</p>
+            <p className="text-slate-500 mb-10 text-lg font-medium">Generate production-ready Landing Page in seconds.</p>
 
             {/* PROMPT BOX (Matching AI Cofounder Style) */}
             <div className="w-full max-w-3xl bg-white rounded-3xl shadow-xl border border-slate-200/60 p-4 relative transition-all hover:shadow-2xl hover:border-slate-300">
@@ -226,7 +226,7 @@ export default function Home() {
             </div>
             
             <p className="mt-6 text-sm font-medium text-slate-400">
-              Pay per usage. {user ? <span className="text-slate-600">Balance: <span className="font-mono text-slate-900">${balance.toFixed(4)}</span></span> : <span className="text-blue-600 cursor-pointer hover:underline" onClick={handleLogin}>Sign in to start</span>}
+              Total Balance. {user ? <span className="text-slate-600">Balance: <span className="font-mono text-slate-900">${balance.toFixed(4)}</span></span> : <span className="text-blue-600 cursor-pointer hover:underline" onClick={handleLogin}>Sign in to start</span>}
             </p>
           </div>
         )}
