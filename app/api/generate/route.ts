@@ -32,20 +32,14 @@ export async function POST(req: Request) {
     const { prompt, model, userId } = await req.json();
 
     if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
     }
 
-    // 1. Get Images
     const images = await getUnsplashImages(prompt);
-    const imageInstruction =
-      images.length > 0
-        ? `### IMAGE ASSETS: Use these: ${JSON.stringify(images)}`
-        : "";
+    const imageInstruction = images.length > 0
+      ? `### IMAGE ASSETS: Use these: ${JSON.stringify(images)}`
+      : "";
 
-    // 2. System Prompt
     const systemPrompt = `
       You are a world-class Frontend Engineer.
       Generate a complete, production-ready landing page as a single HTML file.
@@ -57,37 +51,34 @@ export async function POST(req: Request) {
       ${imageInstruction}
     `;
 
-    // 3. Call OpenAI
-    const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: model || "gpt-5",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: prompt },
-          ],
-          stream: true,
-          stream_options: { include_usage: true },
-        }),
-      }
-    );
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: model || "gpt-5",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: prompt },
+        ],
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
+    });
 
     if (!response.ok) throw new Error(response.statusText);
 
-    // 4. Stream Response & Capture Usage for n8n
+    // Fallback usage tracking
+    const estimatedInputTokens = Math.ceil((systemPrompt.length + prompt.length) / 4);
+    let estimatedOutputTokens = 0;
+    let usageSent = false;
+
     const stream = new ReadableStream({
       async start(controller) {
         const reader = response.body?.getReader();
-        if (!reader) {
-          controller.close();
-          return;
-        }
+        if (!reader) { controller.close(); return; }
 
         const decoder = new TextDecoder();
         let finalUsage: any = null;
@@ -106,23 +97,33 @@ export async function POST(req: Request) {
             try {
               const json = JSON.parse(line.slice(6));
 
-              // Stream Content to Frontend
+              // Stream Content
               const content = json.choices?.[0]?.delta?.content || "";
               if (content) {
+                estimatedOutputTokens += Math.ceil(content.length / 3.5);
                 controller.enqueue(new TextEncoder().encode(content));
               }
 
-              // Capture Usage Object
+              // Capture Usage
               if (json.usage) {
+                usageSent = true;
                 finalUsage = json.usage;
               }
             } catch {}
           }
         }
 
-        // 5. Send Usage to n8n (Async - Fire and Forget)
-        // n8n will handle the logic: Calculate Cost -> Deduct from Supabase
-        if (userId && finalUsage) {
+        // Prepare Final Usage Data for n8n
+        if (!usageSent || !finalUsage) {
+          finalUsage = {
+            prompt_tokens: estimatedInputTokens,
+            completion_tokens: estimatedOutputTokens,
+            total_tokens: estimatedInputTokens + estimatedOutputTokens,
+          };
+        }
+
+        // FIRE WEBHOOK TO N8N (Calculates price & deducts balance)
+        if (userId) {
             fetch(WEBHOOK_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -133,20 +134,16 @@ export async function POST(req: Request) {
                     prompt: prompt.slice(0, 500),
                     timestamp: new Date().toISOString(),
                 }),
-            }).catch(e => console.error("n8n Webhook Error:", e));
+            }).catch(e => console.error("n8n Error:", e));
         }
 
         controller.close();
       },
     });
 
-    return new NextResponse(stream, {
-      headers: { "Content-Type": "text/plain" },
-    });
+    return new NextResponse(stream, { headers: { "Content-Type": "text/plain" } });
+
   } catch (err: any) {
-    return NextResponse.json(
-      { error: err?.message || "Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err?.message || "Server Error" }, { status: 500 });
   }
 }
