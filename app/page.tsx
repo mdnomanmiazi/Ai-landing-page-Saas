@@ -226,7 +226,7 @@ export default function Home() {
             </div>
             
             <p className="mt-6 text-sm font-medium text-slate-400">
-              Total Balance. {user ? <span className="text-slate-600">Balance: <span className="font-mono text-slate-900">${balance.toFixed(4)}</span></span> : <span className="text-blue-600 cursor-pointer hover:underline" onClick={handleLogin}>Sign in to start</span>}
+              Total Balance {user ? <span className="text-slate-600">: <span className="font-mono text-slate-900">${balance.toFixed(2)}</span></span> : <span className="text-blue-600 cursor-pointer hover:underline" onClick={handleLogin}>Sign in to start</span>}
             </p>
           </div>
         )}
