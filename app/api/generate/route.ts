@@ -4,7 +4,7 @@ export const maxDuration = 300;
 import { NextResponse } from "next/server";
 
 // Your n8n Webhook URL
-const WEBHOOK_URL = "https://n8n.ieltsai.net/webhook-test/1aaa265e-8861-4bb7-b2d7-62019de6b0e4";
+const WEBHOOK_URL = "https://n8n.ieltsai.net/webhook/1aaa265e-8861-4bb7-b2d7-62019de6b0e4";
 
 async function getUnsplashImages(query: string): Promise<string[]> {
   try {
