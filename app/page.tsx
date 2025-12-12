@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import { supabase } from '../lib/supabase';
-import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, ArrowUp, Shuffle, SlidersHorizontal, Plus, RefreshCw } from 'lucide-react';
+import { Loader2, Sparkles, Copy, Check, Terminal, ExternalLink, ArrowUp, Shuffle, SlidersHorizontal, Plus, RefreshCw, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function Home() {
@@ -82,9 +82,9 @@ export default function Home() {
   const handleGenerate = async () => {
     if (!user) return handleLogin();
     
-    // Basic Gatekeeping: Don't allow generation if balance is 0 or negative
+    // Basic Gatekeeping: Must have some funds to start
     if (balance <= 0) {
-      if(confirm(`Insufficient balance. Please add funds. Top Up?`)) {
+      if(confirm(`Insufficient balance ($${balance.toFixed(4)}). Add funds to generate?`)) {
         router.push('/topup');
       }
       return;
@@ -102,7 +102,7 @@ export default function Home() {
         body: JSON.stringify({ 
           prompt, 
           model: selectedModel,
-          userId: user.id 
+          userId: user.id // Sending UserID to API -> n8n
         }),
       });
 
@@ -123,11 +123,11 @@ export default function Home() {
         setGeneratedHtml((prev) => prev + chunkValue);
       }
 
-      // Cleanup Markdown
+      // Cleanup Markdown if present
       const cleanHtml = fullCode.replace(/```html|```/g, "").trim();
       setGeneratedHtml(cleanHtml);
 
-      // Save to History (Frontend convenience)
+      // Save locally for quick access
       const { data } = await supabase.from('generations').insert({
         user_id: user.id,
         prompt: prompt,
@@ -136,8 +136,8 @@ export default function Home() {
 
       if (data) setGeneratedId(data.id);
 
-      // Refresh balance after a short delay (allowing n8n to process)
-      setTimeout(() => checkBalance(user.id), 3000);
+      // Refresh balance after delay (let n8n finish processing)
+      setTimeout(() => checkBalance(user.id), 4000);
 
     } catch (error) {
       console.error(error);
@@ -154,6 +154,7 @@ export default function Home() {
       
       <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
         
+        {/* INPUT UI */}
         {!generatedHtml && !loading && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] transition-all duration-500">
             <h1 className="text-4xl md:text-6xl font-extrabold text-slate-800 mb-3 text-center tracking-tight">
@@ -205,6 +206,7 @@ export default function Home() {
           </div>
         )}
 
+        {/* LOADING UI */}
         {loading && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in duration-700">
             <div className="relative mb-8">
@@ -218,6 +220,7 @@ export default function Home() {
           </div>
         )}
 
+        {/* PREVIEW UI */}
         {generatedHtml && !loading && (
           <div className="h-[85vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
@@ -227,11 +230,9 @@ export default function Home() {
                   <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
                   <div className="w-3 h-3 rounded-full bg-green-400"></div>
                 </div>
-                
                 <button onClick={handleNew} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"><Plus size={14} /> New</button>
                 <button onClick={handleGenerate} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"><RefreshCw size={14} /> Regenerate</button>
               </div>
-              
               <div className="flex items-center gap-3">
                 <span className="text-xs font-mono text-slate-400 mr-2">Balance: ${balance.toFixed(4)}</span>
                 <button onClick={handleCopy} className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 px-3 py-2 rounded-lg transition-all">{copied ? <Check size={14} className="text-green-600"/> : <Copy size={14} />}{copied ? "Copied" : "Copy"}</button>
@@ -240,7 +241,6 @@ export default function Home() {
                 )}
               </div>
             </div>
-
             <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 relative w-full h-full">
                <div className="bg-slate-950 p-4 overflow-auto custom-scrollbar border-r border-slate-800"><pre className="text-xs font-mono text-emerald-400 whitespace-pre-wrap">{generatedHtml}</pre></div>
                <div className="bg-white relative"><iframe srcDoc={generatedHtml} className="w-full h-full border-none" title="Preview" /></div>
@@ -248,6 +248,7 @@ export default function Home() {
           </div>
         )}
 
+        {/* STREAMING UI */}
         {isStreaming && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-10 duration-700 h-[80vh]">
             <div className="bg-slate-950 rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-800">
